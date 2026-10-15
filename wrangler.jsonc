@@ -1,0 +1,48 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nexo",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-02-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "./frontend/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nexo-db",
+      "database_id": "nexo-local-db-id",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "MESSAGING_QUEUE",
+        "queue": "nexo-messaging-queue"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "nexo-messaging-queue",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "nexo-messaging-dlq"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  },
+  "vars": {
+    "ENVIRONMENT": "development",
+    "META_GRAPH_API_VERSION": "v21.0"
+  }
+}
