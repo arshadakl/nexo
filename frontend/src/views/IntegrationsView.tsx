@@ -1,3 +1,4 @@
+import * as React from 'react';
 import {
   Unplug,
   CheckCircle2,
@@ -16,8 +17,10 @@ import {
   useConnectInstagram,
   useDisconnectIntegration,
 } from '@/hooks/useIntegrations';
+import { WhatsAppConnectModal } from '@/components/integrations/WhatsAppConnectModal';
 
 export function IntegrationsView() {
+  const [isWAModalOpen, setIsWAModalOpen] = React.useState(false);
   const { data: connections, isLoading, refetch } = useIntegrations();
   const { connect: connectInstagram, isConnecting, notification, dismissNotification } = useConnectInstagram();
   const disconnectMutation = useDisconnectIntegration();
@@ -189,7 +192,7 @@ export function IntegrationsView() {
                 </div>
                 <div>
                   <CardTitle className="text-base font-bold">WhatsApp Business</CardTitle>
-                  <CardDescription className="text-xs">Meta Embedded Signup & Cloud Messaging API</CardDescription>
+                  <CardDescription className="text-xs">Meta Cloud Messaging API</CardDescription>
                 </div>
               </div>
               {waConnection ? (
@@ -200,28 +203,79 @@ export function IntegrationsView() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4 text-xs">
-            <div className="p-3.5 rounded-lg bg-secondary/40 border border-border space-y-2.5">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Channel Status:</span>
-                <span className="text-muted-foreground font-medium">Ready for Embedded Signup</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Messaging Tier:</span>
-                <span className="text-foreground font-medium">Standard Cloud API (24h Window)</span>
-              </div>
-            </div>
+            {waConnection ? (
+              <>
+                <div className="p-3.5 rounded-lg bg-secondary/40 border border-border space-y-2.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Account Name:</span>
+                    <span className="font-semibold text-foreground">{waConnection.displayName || 'WhatsApp Account'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Phone Number ID:</span>
+                    <span className="text-foreground font-mono text-[11px]">{waConnection.phoneNumberId || waConnection.externalAccountId}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Encryption:</span>
+                    <span className="text-emerald-400 font-medium flex items-center gap-1 text-[11px]">
+                      <ShieldCheck className="w-3.5 h-3.5" /> AES-256-GCM Secured
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Webhooks:</span>
+                    <span className="text-emerald-400 font-medium flex items-center gap-1 text-[11px]">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Active & Receiving
+                    </span>
+                  </div>
+                </div>
 
-            <Button
-              size="default"
-              variant="outline"
-              className="w-full text-xs h-10 gap-1.5"
-              onClick={() => alert('WhatsApp Embedded Signup will be configured in Phase 5!')}
-            >
-              <span>Connect WhatsApp (Phase 5)</span>
-            </Button>
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="gap-1.5 text-xs h-8 px-3"
+                    disabled={disconnectMutation.isPending}
+                    onClick={() => {
+                      if (confirm('Disconnect WhatsApp account? Incoming WhatsApp inquiries will no longer be received.')) {
+                        disconnectMutation.mutate(waConnection.id);
+                      }
+                    }}
+                  >
+                    <Unplug className="w-3.5 h-3.5" />
+                    <span>{disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}</span>
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-4 rounded-xl bg-secondary/30 border border-border space-y-2">
+                  <p className="text-muted-foreground leading-relaxed">
+                    Connect your Meta WhatsApp Business Cloud API to receive and reply to visa inquiries directly from applicants on WhatsApp.
+                  </p>
+                  <ul className="text-[11px] text-muted-foreground space-y-1 list-disc list-inside">
+                    <li>Supports 24-hour customer service window</li>
+                    <li>AES-256-GCM encrypted permanent token</li>
+                    <li>Automatic AI lead qualification & counselor takeover</li>
+                  </ul>
+                </div>
+
+                <Button
+                  size="default"
+                  className="w-full text-xs h-10 gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-md shadow-emerald-600/20"
+                  onClick={() => setIsWAModalOpen(true)}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Connect WhatsApp Cloud API</span>
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      <WhatsAppConnectModal
+        isOpen={isWAModalOpen}
+        onClose={() => setIsWAModalOpen(false)}
+      />
     </div>
   );
 }
