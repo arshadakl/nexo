@@ -1,10 +1,10 @@
 import { openAiCompatibleAdapter } from '../adapters/ai/openAiCompatible';
 import { instagramSendApiAdapter } from '../adapters/meta/instagramSendApi';
+import { whatsappSendApiAdapter } from '../adapters/meta/whatsappSendApi';
 import { aiProviderRepository } from '../repositories/aiProviderRepository';
 import { connectionRepository } from '../repositories/connectionRepository';
 import { logger } from '../lib/logger';
 import type { WorkerEnv } from '../env';
-import type { NormalizedInboundMessageEvent } from '@shared/types/meta.types';
 import type { PromptMessage } from '../adapters/ai/adapter.interface';
 
 export async function processQueueBatch(
@@ -25,7 +25,7 @@ export async function processQueueBatch(
     try {
       // 1. Authoritative event lookup from D1
       const eventRecord = await env.DB
-        .prepare('SELECT id, tenant_id, connection_id, payload_json, status FROM webhook_events WHERE id = ?')
+        .prepare('SELECT id, tenant_id, connection_id, provider, payload_json, status FROM webhook_events WHERE id = ?')
         .bind(eventId)
         .first<any>();
 
@@ -34,9 +34,10 @@ export async function processQueueBatch(
         continue;
       }
 
-      const event: NormalizedInboundMessageEvent = JSON.parse(eventRecord.payload_json);
+      const rawEvent = JSON.parse(eventRecord.payload_json);
       const tenantId = eventRecord.tenant_id;
       const connectionId = eventRecord.connection_id;
+      const provider = (eventRecord.provider || 'instagram') as 'instagram' | 'whatsapp';
 
       if (!tenantId || !connectionId) {
         logger.warn('Webhook event missing tenant or connection mapping', { eventId });
@@ -46,12 +47,19 @@ export async function processQueueBatch(
 
       const now = Date.now();
 
+      // Normalize channel properties
+      const senderId = provider === 'whatsapp' ? rawEvent.senderPhone : rawEvent.senderId;
+      const senderName = rawEvent.senderName || (provider === 'whatsapp' ? senderId : 'Instagram User');
+      const providerConvoId = rawEvent.providerConvoId;
+      const providerMessageId = rawEvent.providerMessageId;
+      const messageText = rawEvent.messageText;
+
       // 2. Find or create conversation in D1
       let conversation = await env.DB
         .prepare(
           'SELECT id, ai_mode, human_takeover, unread_count FROM conversations WHERE connection_id = ? AND provider_convo_id = ?'
         )
-        .bind(connectionId, event.providerConvoId)
+        .bind(connectionId, providerConvoId)
         .first<any>();
 
       let conversationId: string;
@@ -64,15 +72,16 @@ export async function processQueueBatch(
               id, tenant_id, connection_id, channel, provider_convo_id,
               customer_id, customer_name, ai_mode, human_takeover,
               unread_count, last_message_at, created_at, updated_at
-            ) VALUES (?, ?, ?, 'instagram', ?, ?, ?, 'INHERIT', 0, 1, ?, ?, ?)`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'INHERIT', 0, 1, ?, ?, ?)`
           )
           .bind(
             conversationId,
             tenantId,
             connectionId,
-            event.providerConvoId,
-            event.senderId,
-            event.senderName || 'Instagram User',
+            provider,
+            providerConvoId,
+            senderId,
+            senderName,
             now,
             now,
             now
@@ -101,9 +110,9 @@ export async function processQueueBatch(
           inboundMsgId,
           tenantId,
           conversationId,
-          event.providerMessageId,
-          event.senderId,
-          event.messageText,
+          providerMessageId,
+          senderId,
+          messageText,
           now
         )
         .run();
@@ -167,7 +176,7 @@ export async function processQueueBatch(
         .bind(
           leadId,
           tenantId,
-          qualification.extractedFields.fullName || event.senderName || 'Applicant',
+          qualification.extractedFields.fullName || senderName || 'Applicant',
           qualification.extractedFields.residenceCountry || null,
           qualification.extractedFields.destinationCountry || null,
           qualification.extractedFields.visaCategory || null,
@@ -180,6 +189,16 @@ export async function processQueueBatch(
           now,
           now
         )
+        .run();
+
+      // Link conversation to lead
+      await env.DB
+        .prepare(
+          `INSERT INTO lead_conversation_links (id, tenant_id, lead_id, conversation_id, link_method, confidence, linked_at)
+           VALUES (?, ?, ?, ?, 'auto_customer_id', 1.0, ?)
+           ON CONFLICT(lead_id, conversation_id) DO NOTHING`
+        )
+        .bind(crypto.randomUUID(), tenantId, leadId, conversationId, now)
         .run();
 
       // 9. Dispatch outbound reply if replyText is generated and safe
@@ -195,24 +214,35 @@ export async function processQueueBatch(
           .bind(outboundMsgId, tenantId, conversationId, qualification.replyText, now)
           .run();
 
-        // Retrieve decrypted connection access token
-        const connection = await connectionRepository.getByExternalIdDecrypted(
+        const connection = await connectionRepository.getByIdDecrypted(
           env.DB,
-          'instagram',
-          event.externalAccountId,
+          connectionId,
           masterKey
         );
 
         if (connection && connection.accessToken) {
-          const sendResult = await instagramSendApiAdapter.sendMessage({
-            accessToken: connection.accessToken,
-            recipientId: event.senderId,
-            text: qualification.replyText,
-          });
+          let dispatchedMessageId = `msg_${Date.now()}`;
+
+          if (provider === 'whatsapp') {
+            const sendResult = await whatsappSendApiAdapter.sendMessage({
+              phoneNumberId: connection.phoneNumberId || connection.externalAccountId,
+              accessToken: connection.accessToken,
+              recipientPhone: senderId,
+              text: qualification.replyText,
+            });
+            dispatchedMessageId = sendResult.messageId;
+          } else {
+            const sendResult = await instagramSendApiAdapter.sendMessage({
+              accessToken: connection.accessToken,
+              recipientId: senderId,
+              text: qualification.replyText,
+            });
+            dispatchedMessageId = sendResult.messageId;
+          }
 
           await env.DB
             .prepare("UPDATE messages SET provider_message_id = ?, delivery_status = 'delivered' WHERE id = ?")
-            .bind(sendResult.messageId, outboundMsgId)
+            .bind(dispatchedMessageId, outboundMsgId)
             .run();
         }
       }

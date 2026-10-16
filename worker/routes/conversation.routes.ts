@@ -3,6 +3,7 @@ import { jsonOk, jsonError } from '../lib/response';
 import { conversationRepository } from '../repositories/conversationRepository';
 import { connectionRepository } from '../repositories/connectionRepository';
 import { instagramSendApiAdapter } from '../adapters/meta/instagramSendApi';
+import { whatsappSendApiAdapter } from '../adapters/meta/whatsappSendApi';
 import {
   SendMessageSchema,
   TakeoverSchema,
@@ -135,47 +136,59 @@ conversationRoutes.post('/:id/messages', async (c) => {
   });
 
   // 2. Dispatch to channel if external connection exists
-  if (conversation.channel === 'instagram') {
-    const masterKey = getMasterKey(c);
-    try {
-      const connection = await connectionRepository.getByIdDecrypted(
-        c.env.DB,
-        conversation.connectionId,
-        masterKey
-      );
+  const masterKey = getMasterKey(c);
+  try {
+    const connection = await connectionRepository.getByIdDecrypted(
+      c.env.DB,
+      conversation.connectionId,
+      masterKey
+    );
 
-      if (connection && connection.accessToken) {
+    if (connection && connection.accessToken) {
+      let dispatchedMessageId = `msg_${Date.now()}`;
+
+      if (conversation.channel === 'whatsapp') {
+        const sendResult = await whatsappSendApiAdapter.sendMessage({
+          phoneNumberId: connection.phoneNumberId || connection.externalAccountId,
+          accessToken: connection.accessToken,
+          recipientPhone: conversation.customerId,
+          text: parseResult.data.messageText,
+        });
+        dispatchedMessageId = sendResult.messageId;
+      } else if (conversation.channel === 'instagram') {
         const sendResult = await instagramSendApiAdapter.sendMessage({
           accessToken: connection.accessToken,
           recipientId: conversation.customerId,
           text: parseResult.data.messageText,
         });
-
-        await conversationRepository.updateMessageDelivery(
-          c.env.DB,
-          messageRecord.id,
-          'delivered',
-          sendResult.messageId
-        );
-        messageRecord.deliveryStatus = 'delivered';
-        messageRecord.providerMessageId = sendResult.messageId;
+        dispatchedMessageId = sendResult.messageId;
       }
-    } catch (err: any) {
-      logger.error('Failed to dispatch staff outbound reply to Instagram', err, {
-        conversationId,
-        messageId: messageRecord.id,
-      });
 
       await conversationRepository.updateMessageDelivery(
         c.env.DB,
         messageRecord.id,
-        'failed',
-        undefined,
-        err?.message || 'Dispatch failed'
+        'delivered',
+        dispatchedMessageId
       );
-      messageRecord.deliveryStatus = 'failed';
-      messageRecord.errorMessage = err?.message || 'Dispatch failed';
+      messageRecord.deliveryStatus = 'delivered';
+      messageRecord.providerMessageId = dispatchedMessageId;
     }
+  } catch (err: any) {
+    logger.error('Failed to dispatch staff outbound reply to messaging provider', err, {
+      conversationId,
+      channel: conversation.channel,
+      messageId: messageRecord.id,
+    });
+
+    await conversationRepository.updateMessageDelivery(
+      c.env.DB,
+      messageRecord.id,
+      'failed',
+      undefined,
+      err?.message || 'Dispatch failed'
+    );
+    messageRecord.deliveryStatus = 'failed';
+    messageRecord.errorMessage = err?.message || 'Dispatch failed';
   }
 
   return jsonOk(c, messageRecord);
