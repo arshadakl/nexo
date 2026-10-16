@@ -3,6 +3,8 @@ import { securityHeaders } from './middleware/securityHeaders';
 import { errorHandler } from './middleware/errorHandler';
 import { healthRoutes } from './routes/health.routes';
 import { aiProviderRoutes } from './routes/aiProvider.routes';
+import { integrationRoutes } from './routes/instagramOAuth.routes';
+import { webhookRoutes } from './routes/webhook.routes';
 import { logger } from './lib/logger';
 import type { WorkerEnv } from './env';
 
@@ -15,6 +17,10 @@ app.onError(errorHandler);
 // Mount API routes
 app.route('/api', healthRoutes);
 app.route('/api/ai', aiProviderRoutes);
+app.route('/api/integrations', integrationRoutes);
+app.route('/webhooks', webhookRoutes);
+
+
 
 
 // Fallback 404 for unknown API endpoints
@@ -31,6 +37,8 @@ app.all('/api/*', (c) => {
   );
 });
 
+import { processQueueBatch } from './queue/consumer';
+
 // Single Cloudflare Worker Export: fetch, queue, scheduled
 export default {
   // HTTP Fetch handler
@@ -39,29 +47,10 @@ export default {
   },
 
   // Queue consumer handler (Processes async message qualification and AI tasks)
-  async queue(batch: MessageBatch<any>, _env: WorkerEnv, _ctx: ExecutionContext): Promise<void> {
-    logger.info('Queue batch received', {
-      queue: batch.queue,
-      messageCount: batch.messages.length,
-    });
-
-    for (const message of batch.messages) {
-      try {
-        // Individual message processing (isolated micro-batch)
-        logger.info('Processing queue message', {
-          id: message.id,
-          attempts: message.attempts,
-        });
-        message.ack();
-      } catch (err) {
-        logger.error('Queue message processing failed', err, {
-          id: message.id,
-          attempts: message.attempts,
-        });
-        message.retry();
-      }
-    }
+  async queue(batch: MessageBatch<any>, env: WorkerEnv, _ctx: ExecutionContext): Promise<void> {
+    await processQueueBatch(batch, env);
   },
+
 
   // Scheduled cron sweeper (Runs every 5 minutes to recover pending outbox jobs)
   async scheduled(event: ScheduledEvent, _env: WorkerEnv, _ctx: ExecutionContext): Promise<void> {
