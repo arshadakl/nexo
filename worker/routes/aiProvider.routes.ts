@@ -5,19 +5,9 @@ import { aiHealthCheckService, AI_PROVIDER_PRESETS } from '../services/aiHealthC
 import { CreateAIProviderSchema } from '@shared/schemas/ai.schema';
 import type { WorkerEnv } from '../env';
 
+import { resolveTenantId, getMasterKey } from '../lib/authContext';
+
 export const aiProviderRoutes = new Hono<{ Bindings: WorkerEnv }>();
-
-// Helper to resolve tenant ID safely
-function resolveTenantId(c: any): string {
-  return c.get('tenantId') || c.req.header('X-Tenant-Id') || 'tenant_visa_horizon_default';
-}
-
-// Fallback 32-byte Base64 key for development if secret not yet provisioned in Cloudflare
-const DEV_FALLBACK_MASTER_KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
-
-function getMasterKey(c: any): string {
-  return c.env.META_TOKEN_ENCRYPTION_KEY || DEV_FALLBACK_MASTER_KEY;
-}
 
 /**
  * GET /api/ai/presets

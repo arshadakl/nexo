@@ -15,21 +15,9 @@ import { logger } from '../lib/logger';
 import type { WorkerEnv } from '../env';
 import type { ChannelType, ConversationStatus } from '@shared/types/crm.types';
 
+import { resolveTenantId, resolveUserId, getMasterKey } from '../lib/authContext';
+
 export const conversationRoutes = new Hono<{ Bindings: WorkerEnv }>();
-
-function resolveTenantId(c: any): string {
-  return c.get('tenantId') || c.req.header('X-Tenant-Id') || 'tenant_visa_horizon_default';
-}
-
-function resolveUserId(c: any): string {
-  return c.get('userId') || c.req.header('X-User-Id') || 'user_staff_counselor_1';
-}
-
-const DEV_FALLBACK_MASTER_KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
-
-function getMasterKey(c: any): string {
-  return c.env.META_TOKEN_ENCRYPTION_KEY || DEV_FALLBACK_MASTER_KEY;
-}
 
 /**
  * GET /api/conversations

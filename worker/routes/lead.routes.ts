@@ -6,15 +6,9 @@ import { CreateNoteSchema } from '@shared/schemas/conversation.schema';
 import type { WorkerEnv } from '../env';
 import type { LeadStatus } from '@shared/types/crm.types';
 
+import { resolveTenantId, resolveUserId } from '../lib/authContext';
+
 export const leadRoutes = new Hono<{ Bindings: WorkerEnv }>();
-
-function resolveTenantId(c: any): string {
-  return c.get('tenantId') || c.req.header('X-Tenant-Id') || 'tenant_visa_horizon_default';
-}
-
-function resolveUserId(c: any): string {
-  return c.get('userId') || c.req.header('X-User-Id') || 'user_staff_counselor_1';
-}
 
 /**
  * GET /api/leads

@@ -4,21 +4,9 @@ import { instagramService } from '../services/instagramService';
 import { connectionRepository } from '../repositories/connectionRepository';
 import type { WorkerEnv } from '../env';
 
+import { resolveTenantId, resolveUserId, getMasterKey } from '../lib/authContext';
+
 export const integrationRoutes = new Hono<{ Bindings: WorkerEnv }>();
-
-function resolveTenantId(c: any): string {
-  return c.get('tenantId') || c.req.header('X-Tenant-Id') || 'tenant_visa_horizon_default';
-}
-
-function resolveUserId(c: any): string {
-  return c.get('userId') || 'user_admin_default';
-}
-
-const DEV_FALLBACK_MASTER_KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
-
-function getMasterKey(c: any): string {
-  return c.env.META_TOKEN_ENCRYPTION_KEY || DEV_FALLBACK_MASTER_KEY;
-}
 
 /**
  * GET /api/integrations

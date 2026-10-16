@@ -3,11 +3,9 @@ import { jsonOk } from '../lib/response';
 import { analyticsService } from '../services/analyticsService';
 import type { WorkerEnv } from '../env';
 
-export const analyticsRoutes = new Hono<{ Bindings: WorkerEnv }>();
+import { resolveTenantId } from '../lib/authContext';
 
-function resolveTenantId(c: any): string {
-  return c.get('tenantId') || c.req.header('X-Tenant-Id') || 'tenant_visa_horizon_default';
-}
+export const analyticsRoutes = new Hono<{ Bindings: WorkerEnv }>();
 
 /**
  * GET /api/analytics/overview
