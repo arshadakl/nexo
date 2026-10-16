@@ -175,6 +175,57 @@ export class ConnectionRepository {
   }
 
   /**
+   * Gets a decrypted connection by its primary ID.
+   */
+  async getByIdDecrypted(
+    db: D1Database,
+    connectionId: string,
+    masterKeyBase64: string
+  ): Promise<DecryptedConnection | null> {
+    const row = await db
+      .prepare(
+        `SELECT 
+          id, tenant_id, provider, external_account_id, display_name,
+          phone_number, phone_number_id, waba_id, encrypted_token,
+          key_nonce, key_version, token_expires_at, status, granted_scopes,
+          webhook_subscribed
+        FROM integration_connections
+        WHERE id = ?
+        LIMIT 1`
+      )
+      .bind(connectionId)
+      .first<any>();
+
+    if (!row) return null;
+
+    const decryptedToken = await decryptCredential(
+      row.encrypted_token,
+      row.key_nonce,
+      row.key_version,
+      masterKeyBase64
+    );
+
+    const connection: DecryptedConnection = {
+      id: row.id,
+      tenantId: row.tenant_id,
+      provider: row.provider as MetaProvider,
+      externalAccountId: row.external_account_id,
+      accessToken: decryptedToken,
+      status: row.status as ConnectionStatus,
+      grantedScopes: row.granted_scopes ? JSON.parse(row.granted_scopes) : [],
+      webhookSubscribed: Boolean(row.webhook_subscribed),
+    };
+
+    if (row.display_name !== null) connection.displayName = row.display_name;
+    if (row.phone_number !== null) connection.phoneNumber = row.phone_number;
+    if (row.phone_number_id !== null) connection.phoneNumberId = row.phone_number_id;
+    if (row.waba_id !== null) connection.wabaId = row.waba_id;
+    if (row.token_expires_at !== null) connection.tokenExpiresAt = row.token_expires_at;
+
+    return connection;
+  }
+
+  /**
    * Saves or updates a verified connection, encrypting the access token with AES-256-GCM.
    */
   async upsertConnection(
