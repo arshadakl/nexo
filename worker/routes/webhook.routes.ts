@@ -86,13 +86,13 @@ webhookRoutes.post('/meta/instagram', async (c) => {
       const tenantId = connection?.tenant_id || null;
       const connectionId = connection?.id || null;
 
-      // Durable D1 insert with UNIQUE event_key constraint
+      // Durable D1 insert directly with status 'enqueued' (saves 1 round-trip)
       await c.env.DB
         .prepare(
           `INSERT INTO webhook_events (
             id, tenant_id, connection_id, event_key, provider,
             event_type, status, attempts, payload_json, received_at
-          ) VALUES (?, ?, ?, ?, 'instagram', 'message', 'received', 0, ?, ?)
+          ) VALUES (?, ?, ?, ?, 'instagram', 'message', 'enqueued', 0, ?, ?)
           ON CONFLICT(event_key) DO NOTHING`
         )
         .bind(eventId, tenantId, connectionId, event.eventKey, JSON.stringify(event), now)
@@ -105,12 +105,6 @@ webhookRoutes.post('/meta/instagram', async (c) => {
         provider: 'instagram',
         timestamp: now,
       });
-
-      // Update event status to enqueued
-      await c.env.DB
-        .prepare("UPDATE webhook_events SET status = 'enqueued' WHERE id = ?")
-        .bind(eventId)
-        .run();
     } catch (err) {
       logger.error('Failed to durably ingest webhook event', err, {
         eventKey: event.eventKey,
@@ -196,13 +190,13 @@ webhookRoutes.post('/meta/whatsapp', async (c) => {
       const tenantId = connection?.tenant_id || null;
       const connectionId = connection?.id || null;
 
-      // Durable D1 insert with UNIQUE event_key constraint
+      // Durable D1 insert directly with status 'enqueued' (saves 1 round-trip)
       await c.env.DB
         .prepare(
           `INSERT INTO webhook_events (
             id, tenant_id, connection_id, event_key, provider,
             event_type, status, attempts, payload_json, received_at
-          ) VALUES (?, ?, ?, ?, 'whatsapp', 'message', 'received', 0, ?, ?)
+          ) VALUES (?, ?, ?, ?, 'whatsapp', 'message', 'enqueued', 0, ?, ?)
           ON CONFLICT(event_key) DO NOTHING`
         )
         .bind(eventId, tenantId, connectionId, event.eventKey, JSON.stringify(event), now)
@@ -215,11 +209,6 @@ webhookRoutes.post('/meta/whatsapp', async (c) => {
         provider: 'whatsapp',
         timestamp: now,
       });
-
-      await c.env.DB
-        .prepare("UPDATE webhook_events SET status = 'enqueued' WHERE id = ?")
-        .bind(eventId)
-        .run();
     } catch (err) {
       logger.error('Failed to durably ingest WhatsApp webhook event', err, {
         eventKey: event.eventKey,
