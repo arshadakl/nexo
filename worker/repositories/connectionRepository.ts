@@ -89,6 +89,7 @@ export class ConnectionRepository {
       .prepare(
         `SELECT 
           id, provider, external_account_id, display_name, phone_number,
+          phone_number_id, waba_id,
           status, granted_scopes, webhook_subscribed, last_health_check_at,
           last_webhook_at, error_code, token_expires_at, created_at
         FROM integration_connections
@@ -113,6 +114,8 @@ export class ConnectionRepository {
 
       if (r.display_name !== null) summary.displayName = r.display_name;
       if (r.phone_number !== null) summary.phoneNumber = r.phone_number;
+      if (r.phone_number_id !== null) summary.phoneNumberId = r.phone_number_id;
+      if (r.waba_id !== null) summary.wabaId = r.waba_id;
       if (r.last_health_check_at !== null) summary.lastHealthCheckAt = r.last_health_check_at;
       if (r.last_webhook_at !== null) summary.lastWebhookAt = r.last_webhook_at;
       if (r.error_code !== null) summary.errorCode = r.error_code;
