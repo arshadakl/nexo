@@ -156,4 +156,30 @@ describe('OpenAICompatibleAdapter', () => {
     expect(check.latencyMs).toBeGreaterThanOrEqual(0);
     expect(check.sampleStructuredOutput).toBeDefined();
   });
+
+  it('correctly parses JSON wrapped in markdown code blocks (```json ... ```)', async () => {
+    const wrappedContent = `\`\`\`json\n${JSON.stringify(sampleValidStructuredOutput, null, 2)}\n\`\`\``;
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: wrappedContent,
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const result = await adapter.generateQualification(mockConfig, [
+      { role: 'user', content: 'I want to study in Germany' },
+    ]);
+
+    expect(result.intent).toBe('study');
+    expect(result.extractedFields.destinationCountry).toBe('Canada');
+    expect(result.leadScore).toBe(60);
+  });
 });

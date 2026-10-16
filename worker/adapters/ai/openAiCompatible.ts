@@ -106,7 +106,13 @@ export class OpenAICompatibleAdapter implements AIProviderClient {
     }
 
     try {
-      const parsedContent = JSON.parse(content);
+      // Strip markdown code fences if output by models (e.g. ```json ... ```)
+      const sanitized = content
+        .trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+      const parsedContent = JSON.parse(sanitized);
       const validated = AIQualificationResultSchema.parse(parsedContent);
       return validated as unknown as AIQualificationResult;
     } catch (parseErr) {
