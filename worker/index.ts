@@ -17,12 +17,18 @@ const app = new Hono<{ Bindings: WorkerEnv }>();
 app.use('*', securityHeaders);
 app.onError(errorHandler);
 
+import { whatsappRoutes } from './routes/whatsapp.routes';
+
+import { analyticsRoutes } from './routes/analytics.routes';
+
 // Mount API routes
 app.route('/api', healthRoutes);
 app.route('/api/ai', aiProviderRoutes);
+app.route('/api/integrations/whatsapp', whatsappRoutes);
 app.route('/api/integrations', integrationRoutes);
 app.route('/api/conversations', conversationRoutes);
 app.route('/api/leads', leadRoutes);
+app.route('/api/analytics', analyticsRoutes);
 app.route('/webhooks', webhookRoutes);
 
 
@@ -43,6 +49,7 @@ app.all('/api/*', (c) => {
 });
 
 import { processQueueBatch } from './queue/consumer';
+import { tokenRefreshService } from './services/tokenRefreshService';
 
 // Single Cloudflare Worker Export: fetch, queue, scheduled
 export default {
@@ -57,12 +64,35 @@ export default {
   },
 
 
-  // Scheduled cron sweeper (Runs every 5 minutes to recover pending outbox jobs)
-  async scheduled(event: ScheduledEvent, _env: WorkerEnv, _ctx: ExecutionContext): Promise<void> {
-    logger.info('Scheduled recovery sweep triggered', {
+  // Scheduled cron handler (Runs token auto-refresh and dead-letter webhook sweep)
+  async scheduled(event: ScheduledEvent, env: WorkerEnv, _ctx: ExecutionContext): Promise<void> {
+    logger.info('Scheduled cron execution triggered', {
       cron: event.cron,
       scheduledTime: event.scheduledTime,
     });
-    // In Phase 2/3: executes bounded indexed sweep on outbox_jobs
+
+    const masterKey = env.META_TOKEN_ENCRYPTION_KEY || 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
+
+    try {
+      // 1. Auto-refresh Instagram 60-day tokens within 14 days of expiry
+      const { refreshedCount, errors } = await tokenRefreshService.refreshExpiringTokens(
+        env.DB,
+        masterKey
+      );
+
+      // 2. Sweep stuck/unacknowledged webhook events
+      const recoveredCount = await tokenRefreshService.sweepStuckWebhooks(
+        env.DB,
+        env.MESSAGING_QUEUE
+      );
+
+      logger.info('Scheduled cron execution completed', {
+        refreshedTokens: refreshedCount,
+        recoveredWebhooks: recoveredCount,
+        errorCount: errors.length,
+      });
+    } catch (err) {
+      logger.error('Error during scheduled cron execution', err);
+    }
   },
 };
