@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { securityHeaders } from './middleware/securityHeaders';
 import { errorHandler } from './middleware/errorHandler';
 import { healthRoutes } from './routes/health.routes';
+import { aiProviderRoutes } from './routes/aiProvider.routes';
 import { logger } from './lib/logger';
 import type { WorkerEnv } from './env';
 
@@ -13,6 +14,8 @@ app.onError(errorHandler);
 
 // Mount API routes
 app.route('/api', healthRoutes);
+app.route('/api/ai', aiProviderRoutes);
+
 
 // Fallback 404 for unknown API endpoints
 app.all('/api/*', (c) => {
