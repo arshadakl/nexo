@@ -8,6 +8,9 @@ import { webhookRoutes } from './routes/webhook.routes';
 import { logger } from './lib/logger';
 import type { WorkerEnv } from './env';
 
+import { conversationRoutes } from './routes/conversation.routes';
+import { leadRoutes } from './routes/lead.routes';
+
 const app = new Hono<{ Bindings: WorkerEnv }>();
 
 // Global middleware
@@ -18,6 +21,8 @@ app.onError(errorHandler);
 app.route('/api', healthRoutes);
 app.route('/api/ai', aiProviderRoutes);
 app.route('/api/integrations', integrationRoutes);
+app.route('/api/conversations', conversationRoutes);
+app.route('/api/leads', leadRoutes);
 app.route('/webhooks', webhookRoutes);
 
 
