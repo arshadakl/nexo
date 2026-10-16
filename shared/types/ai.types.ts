@@ -13,12 +13,38 @@ export interface AIProvider {
   maxTokens: number;
   isActive: boolean;
   isDefault: boolean;
-  customHeaders?: Record<string, string>;
-  lastHealthCheckAt?: number;
+  customHeaders?: Record<string, string> | undefined;
+  lastHealthCheckAt?: number | undefined;
   lastHealthStatus: AIHealthStatus;
-  lastHealthLatencyMs?: number;
+  lastHealthLatencyMs?: number | undefined;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface MaskedAIProvider extends AIProvider {
+  maskedApiKey: string; // e.g. "gsk_••••••••••••3x9Q"
+}
+
+export interface DecryptedAIProviderConfig {
+  id: string;
+  tenantId: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string; // Plaintext decrypted key in memory only
+  defaultModel: string;
+  temperature: number;
+  maxTokens: number;
+  customHeaders?: Record<string, string> | undefined;
+}
+
+export interface AIHealthCheckResult {
+  success: boolean;
+  providerId?: string | undefined;
+  model: string;
+  latencyMs: number;
+  healthStatus: AIHealthStatus;
+  message: string;
+  sampleStructuredOutput?: Partial<AIQualificationResult> | undefined;
 }
 
 export interface CreateAIProviderInput {
@@ -26,23 +52,23 @@ export interface CreateAIProviderInput {
   baseUrl: string;
   apiKey: string;
   defaultModel: string;
-  temperature?: number;
-  maxTokens?: number;
-  isActive?: boolean;
-  isDefault?: boolean;
-  customHeaders?: Record<string, string>;
+  temperature?: number | undefined;
+  maxTokens?: number | undefined;
+  isActive?: boolean | undefined;
+  isDefault?: boolean | undefined;
+  customHeaders?: Record<string, string> | undefined;
 }
 
 export interface UpdateAIProviderInput {
-  name?: string;
-  baseUrl?: string;
-  apiKey?: string; // Optional: only update if provided
-  defaultModel?: string;
-  temperature?: number;
-  maxTokens?: number;
-  isActive?: boolean;
-  isDefault?: boolean;
-  customHeaders?: Record<string, string>;
+  name?: string | undefined;
+  baseUrl?: string | undefined;
+  apiKey?: string | undefined; // Optional: only update if provided
+  defaultModel?: string | undefined;
+  temperature?: number | undefined;
+  maxTokens?: number | undefined;
+  isActive?: boolean | undefined;
+  isDefault?: boolean | undefined;
+  customHeaders?: Record<string, string> | undefined;
 }
 
 export interface AIProviderPreset {
@@ -53,7 +79,7 @@ export interface AIProviderPreset {
   recommendedModels: string[];
   placeholderApiKey: string;
   description: string;
-  customHeaders?: Record<string, string>;
+  customHeaders?: Record<string, string> | undefined;
 }
 
 export interface AIQualificationResult {
@@ -61,16 +87,16 @@ export interface AIQualificationResult {
   language: string;
   replyText: string | null;
   extractedFields: {
-    fullName?: string;
-    residenceCountry?: string;
-    destinationCountry?: string;
-    visaCategory?: string;
-    education?: string;
-    workExperience?: string;
-    languageTest?: string;
-    timeline?: string;
-    budgetRange?: string;
-    phoneOrEmail?: string;
+    fullName?: string | undefined;
+    residenceCountry?: string | undefined;
+    destinationCountry?: string | undefined;
+    visaCategory?: string | undefined;
+    education?: string | undefined;
+    workExperience?: string | undefined;
+    languageTest?: string | undefined;
+    timeline?: string | undefined;
+    budgetRange?: string | undefined;
+    phoneOrEmail?: string | undefined;
   };
   fieldConfidence: Record<string, number>;
   missingFields: string[];
@@ -85,6 +111,6 @@ export interface AIQualificationResult {
   };
   leadStatus: 'collecting_information' | 'qualified' | 'needs_human_review' | 'unqualified' | 'spam_irrelevant';
   humanReviewRequired: boolean;
-  humanReviewReason?: string;
+  humanReviewReason?: string | undefined;
   safetyFlags: string[];
 }
