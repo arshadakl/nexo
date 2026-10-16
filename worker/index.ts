@@ -53,8 +53,17 @@ import { tokenRefreshService } from './services/tokenRefreshService';
 
 // Single Cloudflare Worker Export: fetch, queue, scheduled
 export default {
-  // HTTP Fetch handler
-  fetch(request: Request, env: WorkerEnv, ctx: ExecutionContext): Response | Promise<Response> {
+  // HTTP Fetch handler: routes API & webhooks to Hono, all else to Workers Static Assets (React SPA)
+  async fetch(request: Request, env: WorkerEnv, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith('/api') || url.pathname.startsWith('/webhooks')) {
+      return app.fetch(request, env, ctx);
+    }
+
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+
     return app.fetch(request, env, ctx);
   },
 
