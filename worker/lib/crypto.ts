@@ -71,6 +71,24 @@ export async function sha256Hex(input: string): Promise<string> {
   return toHex(new Uint8Array(digest));
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
 /**
  * Encrypts sensitive credentials (tokens, API keys) using AES-256-GCM.
  * Fresh 12-byte random IV per call.
@@ -81,7 +99,7 @@ export async function encryptCredential(
   keyVersion = 1
 ): Promise<{ ciphertext: string; nonce: string; keyVersion: number }> {
   // Decode Base64 master key (must be 32 bytes for AES-256)
-  const rawKey = Uint8Array.from(atob(masterKeyBase64), (c) => c.charCodeAt(0));
+  const rawKey = base64ToBytes(masterKeyBase64);
   if (rawKey.length !== 32) {
     throw new Error('Master encryption key must be exactly 32 bytes (256 bits)');
   }
@@ -103,8 +121,8 @@ export async function encryptCredential(
     encodedText
   );
 
-  const ciphertextBase64 = btoa(String.fromCharCode(...new Uint8Array(encryptedBuffer)));
-  const nonceBase64 = btoa(String.fromCharCode(...iv));
+  const ciphertextBase64 = bytesToBase64(new Uint8Array(encryptedBuffer));
+  const nonceBase64 = bytesToBase64(iv);
 
   return {
     ciphertext: ciphertextBase64,
@@ -122,7 +140,7 @@ export async function decryptCredential(
   _keyVersion: number,
   masterKeyBase64: string
 ): Promise<string> {
-  const rawKey = Uint8Array.from(atob(masterKeyBase64), (c) => c.charCodeAt(0));
+  const rawKey = base64ToBytes(masterKeyBase64);
   if (rawKey.length !== 32) {
     throw new Error('Master encryption key must be exactly 32 bytes (256 bits)');
   }
@@ -135,8 +153,8 @@ export async function decryptCredential(
     ['decrypt']
   );
 
-  const iv = Uint8Array.from(atob(nonceBase64), (c) => c.charCodeAt(0));
-  const ciphertext = Uint8Array.from(atob(ciphertextBase64), (c) => c.charCodeAt(0));
+  const iv = base64ToBytes(nonceBase64);
+  const ciphertext = base64ToBytes(ciphertextBase64);
 
   const decryptedBuffer = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv },
