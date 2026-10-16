@@ -13,6 +13,8 @@ export interface MetaConnectionSummary {
   externalAccountId: string;
   displayName?: string | undefined;
   phoneNumber?: string | undefined;
+  phoneNumberId?: string | undefined;
+  wabaId?: string | undefined;
   status: ConnectionStatus;
   grantedScopes: string[];
   webhookSubscribed: boolean;
