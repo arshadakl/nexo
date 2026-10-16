@@ -46,7 +46,7 @@ describe('InstagramWebhookAdapter', () => {
     const events = instagramWebhookAdapter.normalizeWebhookPayload(rawPayload);
     expect(events).toHaveLength(1);
 
-    const event = events[0];
+    const event = events[0]!;
     expect(event).toBeDefined();
     expect(event.eventKey).toBe('ig_msg_ig_biz_account_123_cust_msg_002');
     expect(event.provider).toBe('instagram');
