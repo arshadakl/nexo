@@ -10,17 +10,37 @@ import { AIAutomationView } from './views/AIAutomationView';
 import { IntegrationsView } from './views/IntegrationsView';
 import { SettingsView } from './views/SettingsView';
 
-export function App() {
+import { useConversations } from './hooks/useConversations';
+
+function AppContent() {
   const [currentTab, setCurrentTab] = React.useState<NavItemKey>('overview');
+  const [inboxConversationId, setInboxConversationId] = React.useState<string | null>(null);
+
+  const { data: conversations } = useConversations();
+  const unreadCount = React.useMemo(() => {
+    if (!conversations) return 0;
+    return conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+  }, [conversations]);
+
+  const handleNavigateToInbox = (conversationId?: string) => {
+    if (conversationId) {
+      setInboxConversationId(conversationId);
+    }
+    setCurrentTab('inbox');
+  };
+
+  const handleNavigateTab = (tab: NavItemKey) => {
+    setCurrentTab(tab);
+  };
 
   const renderCurrentView = () => {
     switch (currentTab) {
       case 'overview':
-        return <OverviewView />;
+        return <OverviewView onNavigateTab={handleNavigateTab} />;
       case 'inbox':
-        return <InboxView />;
+        return <InboxView initialConversationId={inboxConversationId} />;
       case 'leads':
-        return <LeadsView />;
+        return <LeadsView onNavigateToInbox={handleNavigateToInbox} />;
       case 'ai-automation':
         return <AIAutomationView />;
       case 'integrations':
@@ -28,15 +48,21 @@ export function App() {
       case 'settings':
         return <SettingsView />;
       default:
-        return <OverviewView />;
+        return <OverviewView onNavigateTab={handleNavigateTab} />;
     }
   };
 
   return (
+    <AppShell currentTab={currentTab} onTabChange={setCurrentTab} unreadCount={unreadCount}>
+      {renderCurrentView()}
+    </AppShell>
+  );
+}
+
+export function App() {
+  return (
     <QueryClientProvider client={queryClient}>
-      <AppShell currentTab={currentTab} onTabChange={setCurrentTab} unreadCount={1}>
-        {renderCurrentView()}
-      </AppShell>
+      <AppContent />
     </QueryClientProvider>
   );
 }

@@ -45,7 +45,11 @@ function getStatusBadgeVariant(status: LeadStatus) {
   }
 }
 
-export function LeadsView() {
+interface LeadsViewProps {
+  onNavigateToInbox?: (conversationId?: string) => void;
+}
+
+export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
   const [selectedLeadId, setSelectedLeadId] = React.useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = React.useState<LeadStatus | 'all'>('all');
   const [destinationCountry, setDestinationCountry] = React.useState<string>('all');
@@ -261,6 +265,7 @@ export function LeadsView() {
         <LeadDrawer
           leadId={selectedLeadId}
           onClose={() => setSelectedLeadId(null)}
+          onNavigateToInbox={onNavigateToInbox}
         />
       )}
     </div>

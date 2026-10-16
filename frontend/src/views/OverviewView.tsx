@@ -12,8 +12,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalyticsOverview } from '@/hooks/useAnalytics';
+import type { NavItemKey } from '@/components/layout/Sidebar';
 
-export function OverviewView() {
+interface OverviewViewProps {
+  onNavigateTab?: (tab: NavItemKey) => void;
+}
+
+export function OverviewView({ onNavigateTab }: OverviewViewProps = {}) {
   const { data: analytics, isLoading, refetch } = useAnalyticsOverview();
 
   const kpis = analytics?.kpis;
@@ -218,7 +223,7 @@ export function OverviewView() {
                 variant="outline"
                 size="sm"
                 className="w-full text-xs gap-1.5"
-                onClick={() => window.location.hash = '#leads'}
+                onClick={() => onNavigateTab ? onNavigateTab('leads') : undefined}
               >
                 <span>View Full Leads Pipeline</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />

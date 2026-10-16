@@ -62,12 +62,23 @@ const QUICK_TEMPLATES = [
   },
 ];
 
-export function InboxView() {
-  const [selectedConvoId, setSelectedConvoId] = React.useState<string | null>(null);
+interface InboxViewProps {
+  initialConversationId?: string | null;
+}
+
+export function InboxView({ initialConversationId }: InboxViewProps = {}) {
+  const [selectedConvoId, setSelectedConvoId] = React.useState<string | null>(initialConversationId || null);
   const [filterChannel, setFilterChannel] = React.useState<'all' | ChannelType>('all');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [messageInput, setMessageInput] = React.useState('');
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Synchronize when initialConversationId is provided from outside
+  React.useEffect(() => {
+    if (initialConversationId) {
+      setSelectedConvoId(initialConversationId);
+    }
+  }, [initialConversationId]);
 
   // Queries
   const { data: conversations, isLoading: isLoadingList, refetch: refetchList } = useConversations({
