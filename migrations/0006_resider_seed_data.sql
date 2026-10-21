@@ -3,16 +3,20 @@
 -- Description: Seeds Resider initial knowledge base, escrowed packages, and verified experts
 -- ============================================================================
 
+-- Ensure fallback tenant exists
+INSERT OR IGNORE INTO tenants (id, name, slug, status, created_at, updated_at)
+VALUES ('tenant_default', 'Resider Advisory Default', 'resider-default', 'active', 1700000000000, 1700000000000);
+
 -- 1. Initial Verified Consulting Partners for Business Setup
 INSERT OR IGNORE INTO verified_experts (
     id,
     tenant_id,
     full_name,
     organization_name,
-    sectors,
-    languages,
-    emirates,
-    services_offered,
+    sectors_json,
+    languages_json,
+    emirates_json,
+    services_offered_json,
     is_verified,
     is_available,
     contact_phone,
@@ -22,7 +26,7 @@ INSERT OR IGNORE INTO verified_experts (
 ) VALUES 
 (
     'exp_apex_corp_01',
-    'tenant_default',
+    'tenant_visa_horizon_default',
     'Shaji Rahman',
     'Apex Corporate Services Dubai',
     '["tech","e-commerce","consulting","general"]',
@@ -38,7 +42,7 @@ INSERT OR IGNORE INTO verified_experts (
 ),
 (
     'exp_crescent_02',
-    'tenant_default',
+    'tenant_visa_horizon_default',
     'Faisal Al-Nuaimi',
     'Crescent Business Advisory',
     '["trading","f&b","industrial","services"]',
@@ -49,6 +53,40 @@ INSERT OR IGNORE INTO verified_experts (
     1,
     '+971 52 391 7741',
     'faisal@crescentadvisory.ae',
+    1710000000000,
+    1710000000000
+);
+
+-- Also seed for tenant_default
+INSERT OR IGNORE INTO verified_experts (
+    id,
+    tenant_id,
+    full_name,
+    organization_name,
+    sectors_json,
+    languages_json,
+    emirates_json,
+    services_offered_json,
+    is_verified,
+    is_available,
+    contact_phone,
+    contact_email,
+    created_at,
+    updated_at
+) VALUES 
+(
+    'exp_apex_corp_01_td',
+    'tenant_default',
+    'Shaji Rahman',
+    'Apex Corporate Services Dubai',
+    '["tech","e-commerce","consulting","general"]',
+    '["en","ml","ar"]',
+    '["dubai","sharjah","all"]',
+    '["freezone_licence","mainland_incorporation","corporate_tax"]',
+    1,
+    1,
+    '+971 50 482 1928',
+    'shaji@apexcorp.ae',
     1710000000000,
     1710000000000
 );
@@ -69,7 +107,7 @@ INSERT OR IGNORE INTO business_knowledge_items (
 ) VALUES
 (
     'pkg_long_term_permit',
-    'tenant_default',
+    'tenant_visa_horizon_default',
     'residency_package',
     'Long-Term Residency Package (Permit + Residency)',
     'Comprehensive UAE long-term permit with full 2-year residency visa processing, establishment card, and medical/biometrics coordination.',
@@ -81,7 +119,7 @@ INSERT OR IGNORE INTO business_knowledge_items (
 ),
 (
     'pkg_freelance_visa',
-    'tenant_default',
+    'tenant_visa_horizon_default',
     'residency_package',
     'Freelance Permit & Residency Visa Program',
     'Official freelance permit, establishment card, entry permit, and residency visa stamping for independent consultants and creators.',
@@ -93,7 +131,7 @@ INSERT OR IGNORE INTO business_knowledge_items (
 ),
 (
     'pkg_residency_visa_only',
-    'tenant_default',
+    'tenant_visa_horizon_default',
     'residency_package',
     'Specialized Residency Visa Only Program',
     'Residency visa processing pathway for entrepreneurs with existing permits or investor setups, including priority medical and Emirates ID VIP biometrics.',
@@ -105,7 +143,7 @@ INSERT OR IGNORE INTO business_knowledge_items (
 ),
 (
     'pol_residency_stages',
-    'tenant_default',
+    'tenant_visa_horizon_default',
     'policy',
     '6 UAE Residency Delivery Stages',
     'Our residency service follows 6 delivery stages: 1) Initial profile check, 2) Entry permit, 3) Status change, 4) Medical fitness test, 5) Emirates ID biometrics, 6) Residency visa stamping. We provide two distinct pathways: Permit with Residency or Residency Only.',
@@ -117,7 +155,7 @@ INSERT OR IGNORE INTO business_knowledge_items (
 ),
 (
     'pol_expert_handover',
-    'tenant_default',
+    'tenant_visa_horizon_default',
     'business_service',
     'Verified Business Setup Partner Matching',
     'Resider connects qualified business setup enquiries with verified consulting partners based on sector activity, preferred language, and target Emirate. Specific license fees are never promised in chat without verified partner review, and explicit customer consent is mandatory before sharing contact details.',
