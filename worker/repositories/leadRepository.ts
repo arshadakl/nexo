@@ -15,11 +15,6 @@ export interface LeadListFilters {
   sortBy?: ('recent' | 'status') | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
-
-  // Legacy fallback compatibility
-  destinationCountry?: string | undefined;
-  minScore?: number | undefined;
-  maxScore?: number | undefined;
 }
 
 export class LeadRepository {
