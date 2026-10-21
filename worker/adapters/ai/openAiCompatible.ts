@@ -86,7 +86,7 @@ export class OpenAICompatibleAdapter implements AIProviderClient {
         );
       }
       throw new AIProviderError(
-        `AI provider returned error (${response.status})`,
+        `AI provider returned error (${response.status}): ${errorText.substring(0, 300)}`,
         'PROVIDER_ERROR',
         response.status,
         errorText
@@ -107,26 +107,76 @@ export class OpenAICompatibleAdapter implements AIProviderClient {
 
     try {
       // Strip markdown code fences if output by models (e.g. ```json ... ```)
-      const sanitized = content
+      let sanitized = content
         .trim()
         .replace(/^```(?:json)?\s*/i, '')
         .replace(/\s*```$/i, '')
         .trim();
-      const parsedContent = JSON.parse(sanitized);
-      const validated = AIQualificationResultSchema.parse(parsedContent);
-      return validated as unknown as AIQualificationResult;
+
+      // If text contains a JSON object anywhere, extract it
+      const firstBrace = sanitized.indexOf('{');
+      const lastBrace = sanitized.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        sanitized = sanitized.substring(firstBrace, lastBrace + 1);
+      }
+
+      let parsedContent: any;
+      try {
+        parsedContent = JSON.parse(sanitized);
+      } catch (err) {
+        throw new AIProviderError(
+          'AI provider returned an empty or invalid message content payload',
+          'SCHEMA_MISMATCH',
+          200,
+          content
+        );
+      }
+
+      const validated = AIQualificationResultSchema.safeParse(parsedContent);
+      if (validated.success) {
+        return validated.data as unknown as AIQualificationResult;
+      }
+
+      // Safe fallback ensuring replyText is always delivered
+      return {
+        intent: (parsedContent.intent || 'residency') as any,
+        language: parsedContent.language || 'en',
+        toneMirroring: parsedContent.toneMirroring || null,
+        replyText: parsedContent.replyText || content.trim(),
+        rationale: parsedContent.rationale || null,
+        extractedFields: parsedContent.extractedFields || {},
+        fieldConfidence: parsedContent.fieldConfidence || {},
+        missingFields: Array.isArray(parsedContent.missingFields) ? parsedContent.missingFields : [],
+        questionsAnswered: Array.isArray(parsedContent.questionsAnswered) ? parsedContent.questionsAnswered : [],
+        leadStatus: parsedContent.leadStatus || 'needs_clarification',
+        statusReason: parsedContent.statusReason || 'Extracted via fallback parser',
+        expertMatchCriteria: parsedContent.expertMatchCriteria,
+        humanReviewRequired: Boolean(parsedContent.humanReviewRequired),
+        safetyFlags: Array.isArray(parsedContent.safetyFlags) ? parsedContent.safetyFlags : [],
+      };
     } catch (parseErr) {
-      logger.warn('AI structured output failed schema validation', {
+      if (parseErr instanceof AIProviderError) {
+        throw parseErr;
+      }
+      logger.warn('AI structured output fallback used', {
         provider: config.name,
         model: config.defaultModel,
         rawSnippet: content.slice(0, 200),
       });
-      throw new AIProviderError(
-        'AI provider completion could not be parsed into required qualification schema',
-        'SCHEMA_MISMATCH',
-        200,
-        parseErr instanceof Error ? parseErr.message : String(parseErr)
-      );
+      return {
+        intent: 'residency',
+        language: 'en',
+        replyText: content.trim(),
+        rationale: 'Exception occurred during JSON parsing',
+        extractedFields: {},
+        fieldConfidence: {},
+        missingFields: [],
+        questionsAnswered: [],
+        leadStatus: 'needs_clarification',
+        statusReason: 'Exception parsing structured AI output',
+        humanReviewRequired: false,
+        safetyFlags: [],
+      };
     }
   }
 
@@ -138,11 +188,11 @@ export class OpenAICompatibleAdapter implements AIProviderClient {
       {
         role: 'system',
         content:
-          'You are a JSON qualification assistant. Return valid JSON adhering to: {"intent": "study", "language": "en", "replyText": "Hello! How can I help with your study visa?", "extractedFields": {}, "fieldConfidence": {}, "missingFields": [], "nextQuestion": null, "leadScore": 50, "scoreComponents": {"intentScore": 15, "completenessScore": 10, "readinessScore": 10, "timelineFitScore": 10, "engagementScore": 5}, "leadStatus": "collecting_information", "humanReviewRequired": false, "safetyFlags": []}',
+          'You are a JSON qualification assistant for Resider UAE. Return valid JSON adhering to: {"intent": "residency", "language": "en", "replyText": "Hey 👋 How can we help?", "rationale": "Initial greeting", "extractedFields": {}, "fieldConfidence": {}, "missingFields": [], "leadStatus": "needs_clarification", "statusReason": "Initial inbound inquiry", "humanReviewRequired": false, "safetyFlags": []}',
       },
       {
         role: 'user',
-        content: 'Test ping for Canada study visa inquiry.',
+        content: 'Hi, I need help with UAE residency.',
       },
     ];
 

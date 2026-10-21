@@ -17,11 +17,11 @@ export class InstagramWebhookAdapter {
       const messagingList = Array.isArray(entry.messaging) ? entry.messaging : [];
 
       for (const item of messagingList) {
-        // Only process customer-initiated inbound text/media messages
-        if (item.message && !item.message.is_echo) {
+        // Only process customer-initiated inbound text/media messages that contain text
+        if (item.message && !item.message.is_echo && item.message.text && String(item.message.text).trim().length > 0) {
           const providerMessageId = String(item.message.mid || `mid_${Date.now()}_${Math.random()}`);
           const senderId = String(item.sender?.id || '');
-          const messageText = String(item.message.text || '');
+          const messageText = String(item.message.text).trim();
           const timestamp = Number(item.timestamp || Date.now());
 
           events.push({

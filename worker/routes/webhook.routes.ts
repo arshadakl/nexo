@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { constantTimeEqual, verifyMetaSignature } from '../lib/crypto';
 import { instagramWebhookAdapter } from '../adapters/meta/instagramWebhook';
+import { instagramOAuthAdapter } from '../adapters/meta/instagramOAuth';
 import { whatsappWebhookAdapter } from '../adapters/meta/whatsappWebhook';
 import { logger } from '../lib/logger';
 import type { WorkerEnv } from '../env';
@@ -74,14 +75,25 @@ webhookRoutes.post('/meta/instagram', async (c) => {
   const now = Date.now();
 
   for (const event of events) {
+    if (!event.messageText || event.messageText.trim().length === 0) {
+      continue;
+    }
+
     const eventId = crypto.randomUUID();
 
     try {
-      // Find connection and tenant
-      const connection = await c.env.DB
+      // Find connection and tenant: try exact external_account_id, fallback to active provider connection
+      let connection = await c.env.DB
         .prepare('SELECT id, tenant_id FROM integration_connections WHERE provider = ? AND external_account_id = ?')
         .bind('instagram', event.externalAccountId)
         .first<{ id: string; tenant_id: string }>();
+
+      if (!connection) {
+        connection = await c.env.DB
+          .prepare('SELECT id, tenant_id FROM integration_connections WHERE provider = ? AND status = ? LIMIT 1')
+          .bind('instagram', 'connected')
+          .first<{ id: string; tenant_id: string }>();
+      }
 
       const tenantId = connection?.tenant_id || null;
       const connectionId = connection?.id || null;
@@ -98,7 +110,96 @@ webhookRoutes.post('/meta/instagram', async (c) => {
         .bind(eventId, tenantId, connectionId, event.eventKey, JSON.stringify(event), now)
         .run();
 
-      // Enqueue lightweight pointer to Cloudflare Queue
+      // Immediately persist conversation and message into D1 so inbox updates in real-time
+      if (tenantId && connectionId) {
+        let conversation = await c.env.DB
+          .prepare('SELECT id FROM conversations WHERE connection_id = ? AND provider_convo_id = ?')
+          .bind(connectionId, event.providerConvoId)
+          .first<{ id: string }>();
+
+        // Attempt to resolve real Instagram username via Graph API
+        let customerName = 'Instagram User';
+        let customerHandle: string | null = null;
+
+        try {
+          const connSecret = await c.env.DB
+            .prepare('SELECT encrypted_token, key_nonce, key_version FROM integration_connections WHERE id = ?')
+            .bind(connectionId)
+            .first<{ encrypted_token: string; key_nonce: string; key_version: number }>();
+
+          if (connSecret) {
+            const masterKey = c.env.META_TOKEN_ENCRYPTION_KEY || 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
+            const { decryptCredential } = await import('../lib/crypto');
+            const token = await decryptCredential(
+              connSecret.encrypted_token,
+              connSecret.key_nonce,
+              connSecret.key_version,
+              masterKey
+            );
+            const userProfile = await instagramOAuthAdapter.fetchUserProfile(token, event.senderId);
+            if (userProfile?.username) {
+              customerHandle = userProfile.username;
+              customerName = userProfile.name || `@${userProfile.username}`;
+            }
+          }
+        } catch (err) {
+          logger.warn('Could not resolve customer profile metadata', { senderId: event.senderId });
+        }
+
+        let conversationId: string;
+        if (!conversation) {
+          conversationId = crypto.randomUUID();
+          await c.env.DB
+            .prepare(
+              `INSERT INTO conversations (
+                id, tenant_id, connection_id, channel, provider_convo_id,
+                customer_id, customer_name, customer_handle, ai_mode, human_takeover,
+                unread_count, last_message_at, created_at, updated_at
+              ) VALUES (?, ?, ?, 'instagram', ?, ?, ?, ?, 'INHERIT', 0, 1, ?, ?, ?)`
+            )
+            .bind(
+              conversationId,
+              tenantId,
+              connectionId,
+              event.providerConvoId,
+              event.senderId,
+              customerName,
+              customerHandle,
+              now,
+              now,
+              now
+            )
+            .run();
+        } else {
+          conversationId = conversation.id;
+          await c.env.DB
+            .prepare('UPDATE conversations SET last_message_at = ?, unread_count = unread_count + 1, customer_name = COALESCE(?, customer_name), customer_handle = COALESCE(?, customer_handle), updated_at = ? WHERE id = ?')
+            .bind(now, customerName !== 'Instagram User' ? customerName : null, customerHandle, now, conversationId)
+            .run();
+        }
+
+        const msgId = crypto.randomUUID();
+        await c.env.DB
+          .prepare(
+            `INSERT INTO messages (
+              id, tenant_id, conversation_id, provider_message_id, direction,
+              sender_type, sender_id, message_text, message_type, delivery_status, created_at
+            ) VALUES (?, ?, ?, ?, 'inbound', 'applicant', ?, ?, 'text', 'delivered', ?)
+            ON CONFLICT(provider_message_id) DO NOTHING`
+          )
+          .bind(
+            msgId,
+            tenantId,
+            conversationId,
+            event.providerMessageId,
+            event.senderId,
+            event.messageText,
+            now
+          )
+          .run();
+      }
+
+      // Enqueue lightweight pointer to Cloudflare Queue for async AI qualification
       await c.env.MESSAGING_QUEUE.send({
         eventId,
         schemaVersion: 1,

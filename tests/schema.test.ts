@@ -6,43 +6,35 @@ import {
 import { UpdateLeadSchema } from '../shared/schemas/lead.schema';
 
 describe('Shared Schema Validations', () => {
-  it('validates a complete AI qualification output', () => {
+  it('validates a complete RESIDER AI qualification output', () => {
     const sampleOutput = {
-      intent: 'study',
+      intent: 'residency',
       language: 'en',
-      replyText: 'Hi Alex! Which university program are you planning to apply for in Canada?',
+      replyText: 'We help with residency programmes and connecting people with verified experts. Are you looking for residency only, or a permit with residency?',
+      rationale: 'Clarifying whether applicant needs permit alongside residency visa',
       extractedFields: {
-        fullName: 'Alex Johnson',
-        destinationCountry: 'Canada',
-        visaCategory: 'study_permit',
-        education: 'Bachelor in Computer Science',
+        fullName: 'Sameer Khan',
+        serviceVertical: 'residency',
+        residencyIntent: 'understanding_options',
+        workBusinessActivity: 'Software Consultant',
+        uaeLocationContext: 'inside_uae',
       },
-      fieldConfidence: {
-        destinationCountry: 0.95,
-        visaCategory: 0.9,
-      },
-      missingFields: ['timeline', 'budgetRange'],
-      nextQuestion: 'What is your intended start term?',
-      leadScore: 65,
-      scoreComponents: {
-        intentScore: 25,
-        completenessScore: 15,
-        readinessScore: 15,
-        timelineFitScore: 5,
-        engagementScore: 5,
-      },
-      leadStatus: 'collecting_information',
+      missingFields: ['timeline', 'contactMethodPreference'],
+      questionsAnswered: ['workBusinessActivity', 'uaeLocationContext'],
+      leadStatus: 'exploring',
+      statusReason: 'Applicant is inside UAE seeking software freelance options but has not committed to next steps',
       humanReviewRequired: false,
       safetyFlags: [],
     };
 
     const parsed = AIQualificationResultSchema.parse(sampleOutput);
-    expect(parsed.intent).toBe('study');
-    expect(parsed.leadScore).toBe(65);
-    expect(parsed.extractedFields.destinationCountry).toBe('Canada');
+    expect(parsed.intent).toBe('residency');
+    expect(parsed.leadStatus).toBe('exploring');
+    expect(parsed.extractedFields.workBusinessActivity).toBe('Software Consultant');
+    expect(parsed.extractedFields.uaeLocationContext).toBe('inside_uae');
   });
 
-  it('supplies safe defaults on partial AI qualification output', () => {
+  it('supplies safe defaults on minimal RESIDER AI qualification output', () => {
     const minimalOutput = {
       intent: 'unknown',
       replyText: null,
@@ -50,8 +42,7 @@ describe('Shared Schema Validations', () => {
 
     const parsed = AIQualificationResultSchema.parse(minimalOutput);
     expect(parsed.language).toBe('en');
-    expect(parsed.leadScore).toBe(0);
-    expect(parsed.leadStatus).toBe('collecting_information');
+    expect(parsed.leadStatus).toBe('needs_clarification');
     expect(parsed.missingFields).toEqual([]);
     expect(parsed.safetyFlags).toEqual([]);
     expect(parsed.humanReviewRequired).toBe(false);
@@ -81,16 +72,18 @@ describe('Shared Schema Validations', () => {
     ).toThrow();
   });
 
-  it('validates UpdateLeadSchema input', () => {
+  it('validates UpdateLeadSchema input for RESIDER', () => {
     const update = {
-      leadStatus: 'qualified' as const,
-      leadScore: 85,
-      residenceCountry: 'India',
-      destinationCountry: 'Australia',
+      leadStatus: 'ready_for_team' as const,
+      serviceVertical: 'business_setup' as const,
+      statusReason: 'Lead requested consultation for LLC setup in Dubai',
+      contactPermission: true,
+      externalSharingPermission: true,
     };
 
     const parsed = UpdateLeadSchema.parse(update);
-    expect(parsed.leadStatus).toBe('qualified');
-    expect(parsed.leadScore).toBe(85);
+    expect(parsed.leadStatus).toBe('ready_for_team');
+    expect(parsed.serviceVertical).toBe('business_setup');
+    expect(parsed.externalSharingPermission).toBe(true);
   });
 });

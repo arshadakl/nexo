@@ -15,6 +15,7 @@ import {
   Briefcase,
   MessageSquare,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ import {
   useConversationMessages,
   useSendMessage,
   useToggleTakeover,
+  useClearConversationHistory,
 } from '@/hooks/useConversations';
 import type { ChannelType } from '@shared/types/crm.types';
 
@@ -45,20 +47,20 @@ function getScoreBadgeClass(score: number): string {
 
 const QUICK_TEMPLATES = [
   {
-    label: '📋 Checklist',
-    text: 'Here are the required documents for your visa assessment: 1. Updated CV 2. Degree Certificates 3. Valid Passport 4. Language proficiency test score if available.',
+    label: '🇦🇪 Freelance Visa (AED 7.5k)',
+    text: 'Our Freelance Permit & Residency Visa Program starts from AED 7,500. It includes your freelance permit, establishment card, and residency processing. Would you like me to share the document checklist?',
   },
   {
-    label: '🇩🇪 Opportunity Card',
-    text: 'The German Opportunity Card (Chancenkarte) uses a points-based system. With your recognized qualifications, you are a strong applicant. Would you like to schedule an eligibility call?',
+    label: '📜 Long-Term Package (AED 7k–7.5k)',
+    text: 'Our Long-term Residency Package (Permit + Residency) is priced at AED 7,000–7,500 all inclusive. It is ideal for freelancers and digital nomads looking for a seamless UAE setup.',
   },
   {
-    label: '🇨🇦 Express Entry',
-    text: 'For Canada Express Entry, your CRS score is evaluated based on age, education, and foreign work experience. What is your estimated timeline to relocate?',
+    label: '💳 Residency Visa (AED 15k–20k)',
+    text: 'Our specialized Residency Visa program (AED 15,000–20,000) is tailored for entrepreneurs and property investors with VIP priority medical and Emirates ID processing.',
   },
   {
-    label: '📞 Book Call',
-    text: 'Our licensed immigration counselor can review your complete documentation. Would tomorrow afternoon or Friday morning work better for a 15-minute consultation?',
+    label: '📞 Book Dubai Call',
+    text: 'Our senior residency advisor in Dubai can review your profile. What is the best WhatsApp number to connect with you tomorrow?',
   },
 ];
 
@@ -102,6 +104,7 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
   // Mutations
   const sendMessageMutation = useSendMessage(selectedConvoId);
   const toggleTakeoverMutation = useToggleTakeover(selectedConvoId);
+  const clearChatMutation = useClearConversationHistory(selectedConvoId);
 
   // Auto scroll to bottom of messages
   React.useEffect(() => {
@@ -135,6 +138,16 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
     toggleTakeoverMutation.mutate({
       takeover: !activeConvo.humanTakeover,
     });
+  };
+
+  const handleClearChat = () => {
+    if (!activeConvo) return;
+    const confirmed = window.confirm(
+      `Are you sure you want to clear chat history for "${activeConvo.customerName}"?\n\nThis will wipe all existing messages and reset this lead profile. Any future message from this user will start fresh as a new inquiry without past history.`
+    );
+    if (!confirmed) return;
+
+    clearChatMutation.mutate();
   };
 
   return (
@@ -326,6 +339,18 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-8 gap-1.5 text-muted-foreground hover:text-rose-400 hover:border-rose-500/40 hover:bg-rose-950/20"
+                  onClick={handleClearChat}
+                  disabled={clearChatMutation.isPending}
+                  title="Clear chat history and reset lead data"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{clearChatMutation.isPending ? 'Clearing...' : 'Clear Chat'}</span>
+                </Button>
+
                 <Button
                   size="sm"
                   variant={activeConvo.humanTakeover ? 'destructive' : 'outline'}
@@ -532,14 +557,14 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
 
           {activeConvo.lead ? (
             <div className="space-y-4">
-              {/* Destination & Visa */}
+              {/* UAE Program, Phone & Lifestyle Sport */}
               <div className="space-y-2">
                 <div className="flex items-start gap-2 text-xs">
                   <Globe className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-[10px] text-muted-foreground block">Destination</span>
+                    <span className="text-[10px] text-muted-foreground block">Destination & Program</span>
                     <span className="font-medium text-foreground">
-                      {activeConvo.lead.destinationCountry || 'Not extracted yet'}
+                      {activeConvo.lead.servicePackage || 'UAE Residency'}
                     </span>
                   </div>
                 </div>
@@ -547,9 +572,19 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
                 <div className="flex items-start gap-2 text-xs">
                   <GraduationCap className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-[10px] text-muted-foreground block">Visa Category</span>
+                    <span className="text-[10px] text-muted-foreground block">Phone Number</span>
+                    <span className="font-medium text-foreground font-mono">
+                      {activeConvo.lead.phoneNumber || '⏳ Pending'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 text-xs">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block">Favorite Sport / Hobby</span>
                     <span className="font-medium text-foreground">
-                      {activeConvo.lead.visaCategory || 'Consultation Inquiry'}
+                      {activeConvo.lead.favoriteSport || '⏳ Pending'}
                     </span>
                   </div>
                 </div>
@@ -568,22 +603,36 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
               {/* Information Completeness Checklist */}
               <div className="border border-border/70 rounded-lg p-3 bg-muted/20 space-y-2">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                  AI Qualification Checklist
+                  UAE Qualification Checklist
                 </span>
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Target Country:</span>
+                    <span className="text-muted-foreground">Full Name:</span>
                     <span className="font-medium">
-                      {activeConvo.lead.destinationCountry ? '✅ Identified' : '⏳ Pending'}
+                      {activeConvo.lead.fullName && activeConvo.lead.fullName !== 'Applicant' && activeConvo.lead.fullName !== 'Instagram User'
+                        ? `✅ ${activeConvo.lead.fullName}`
+                        : '⏳ Pending'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Visa Intent:</span>
+                    <span className="text-muted-foreground">Program Selected:</span>
                     <span className="font-medium">
-                      {activeConvo.lead.visaCategory ? '✅ Identified' : '⏳ Pending'}
+                      {activeConvo.lead.servicePackage ? '✅ Identified' : '⏳ Pending'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">WhatsApp / Phone:</span>
+                    <span className="font-medium font-mono">
+                      {activeConvo.lead.phoneNumber ? '✅ Captured' : '⏳ Pending'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Favorite Sport:</span>
+                    <span className="font-medium">
+                      {activeConvo.lead.favoriteSport ? `✅ ${activeConvo.lead.favoriteSport}` : '⏳ Pending'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1 border-t border-border/50">
                     <span className="text-muted-foreground">Lead Score:</span>
                     <span className="font-medium font-mono">
                       {activeConvo.lead.leadScore >= 70 ? '🟢 Hot Lead' : '🟡 In Review'}

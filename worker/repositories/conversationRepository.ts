@@ -40,12 +40,17 @@ export class ConversationRepository {
         ) AS last_message_text,
         l.id AS lead_id,
         l.full_name AS lead_name,
-        l.destination_country AS lead_country,
-        l.visa_category AS lead_visa,
-        l.lead_score,
-        l.lead_status
+        l.phone_or_email AS lead_contact,
+        l.service_vertical AS lead_vertical,
+        l.residency_intent AS lead_intent,
+        l.lead_status,
+        l.status_reason,
+        l.missing_details_json
       FROM conversations c
-      LEFT JOIN lead_conversation_links lcl ON lcl.conversation_id = c.id
+      LEFT JOIN (
+        SELECT lead_id, conversation_id, ROW_NUMBER() OVER (PARTITION BY conversation_id ORDER BY linked_at DESC) as rn
+        FROM lead_conversation_links
+      ) lcl ON lcl.conversation_id = c.id AND lcl.rn = 1
       LEFT JOIN leads l ON l.id = lcl.lead_id
       WHERE c.tenant_id = ?
     `;
@@ -92,11 +97,19 @@ export class ConversationRepository {
       lead: row.lead_id
         ? {
             id: row.lead_id,
-            fullName: row.lead_name,
-            destinationCountry: row.lead_country,
-            visaCategory: row.lead_visa,
-            leadScore: Number(row.lead_score || 0),
-            leadStatus: row.lead_status,
+            fullName: row.lead_name || null,
+            phoneOrEmail: row.lead_contact || null,
+            serviceVertical: row.lead_vertical || 'unspecified',
+            residencyIntent: row.lead_intent || 'unspecified',
+            leadStatus: row.lead_status || 'needs_clarification',
+            statusReason: row.status_reason || null,
+            missingDetails: (() => {
+              try {
+                return row.missing_details_json ? JSON.parse(row.missing_details_json) : [];
+              } catch {
+                return [];
+              }
+            })(),
           }
         : null,
     }));
@@ -123,12 +136,17 @@ export class ConversationRepository {
         ) AS last_message_text,
         l.id AS lead_id,
         l.full_name AS lead_name,
-        l.destination_country AS lead_country,
-        l.visa_category AS lead_visa,
-        l.lead_score,
-        l.lead_status
+        l.phone_or_email AS lead_contact,
+        l.service_vertical AS lead_vertical,
+        l.residency_intent AS lead_intent,
+        l.lead_status,
+        l.status_reason,
+        l.missing_details_json
       FROM conversations c
-      LEFT JOIN lead_conversation_links lcl ON lcl.conversation_id = c.id
+      LEFT JOIN (
+        SELECT lead_id, conversation_id, ROW_NUMBER() OVER (PARTITION BY conversation_id ORDER BY linked_at DESC) as rn
+        FROM lead_conversation_links
+      ) lcl ON lcl.conversation_id = c.id AND lcl.rn = 1
       LEFT JOIN leads l ON l.id = lcl.lead_id
       WHERE c.tenant_id = ? AND c.id = ?
     `;
@@ -165,11 +183,19 @@ export class ConversationRepository {
       lead: row.lead_id
         ? {
             id: row.lead_id,
-            fullName: row.lead_name,
-            destinationCountry: row.lead_country,
-            visaCategory: row.lead_visa,
-            leadScore: Number(row.lead_score || 0),
-            leadStatus: row.lead_status,
+            fullName: row.lead_name || null,
+            phoneOrEmail: row.lead_contact || null,
+            serviceVertical: row.lead_vertical || 'unspecified',
+            residencyIntent: row.lead_intent || 'unspecified',
+            leadStatus: row.lead_status || 'needs_clarification',
+            statusReason: row.status_reason || null,
+            missingDetails: (() => {
+              try {
+                return row.missing_details_json ? JSON.parse(row.missing_details_json) : [];
+              } catch {
+                return [];
+              }
+            })(),
           }
         : null,
     };
@@ -332,6 +358,63 @@ export class ConversationRepository {
     await db
       .prepare('UPDATE conversations SET ai_mode = ?, updated_at = ? WHERE tenant_id = ? AND id = ?')
       .bind(aiMode, now, tenantId, conversationId)
+      .run();
+  }
+
+  /**
+   * Clears all messages and lead links for a conversation so the client is treated as a brand new lead.
+   * CPU: < 1.5 ms.
+   */
+  async clearConversationHistory(
+    db: D1Database,
+    tenantId: string,
+    conversationId: string
+  ): Promise<void> {
+    const now = Date.now();
+
+    // 1. Get associated lead IDs before deleting links
+    const leadLinks = await db
+      .prepare('SELECT lead_id FROM lead_conversation_links WHERE tenant_id = ? AND conversation_id = ?')
+      .bind(tenantId, conversationId)
+      .all<{ lead_id: string }>();
+
+    const leadIds = (leadLinks.results || []).map((l) => l.lead_id);
+
+    // 2. Delete messages belonging to this conversation
+    await db
+      .prepare('DELETE FROM messages WHERE tenant_id = ? AND conversation_id = ?')
+      .bind(tenantId, conversationId)
+      .run();
+
+    // 3. Delete lead_conversation_links for this conversation
+    await db
+      .prepare('DELETE FROM lead_conversation_links WHERE tenant_id = ? AND conversation_id = ?')
+      .bind(tenantId, conversationId)
+      .run();
+
+    // 4. Delete the orphaned leads
+    if (leadIds.length > 0) {
+      const placeholders = leadIds.map(() => '?').join(',');
+      await db
+        .prepare(`DELETE FROM leads WHERE tenant_id = ? AND id IN (${placeholders})`)
+        .bind(tenantId, ...leadIds)
+        .run();
+    }
+
+    // 5. Reset conversation metadata, human takeover, and customer name
+    await db
+      .prepare(
+        `UPDATE conversations SET 
+          unread_count = 0, 
+          human_takeover = 0, 
+          takeover_user_id = NULL, 
+          takeover_at = NULL, 
+          ai_mode = 'INHERIT', 
+          last_outbound_at = NULL,
+          updated_at = ? 
+        WHERE tenant_id = ? AND id = ?`
+      )
+      .bind(now, tenantId, conversationId)
       .run();
   }
 }

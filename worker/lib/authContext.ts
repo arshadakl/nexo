@@ -4,7 +4,7 @@ import type { WorkerEnv } from '../env';
 const DEV_FALLBACK_MASTER_KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 
 /**
- * Resolves the active tenant ID from context or request headers.
+ * Resolves the active tenant ID from context, session cookie, or fallback headers.
  */
 export function resolveTenantId(c: Context<{ Bindings: WorkerEnv }>): string {
   const fromVar = (c as unknown as { get: (key: string) => unknown }).get?.('tenantId');
@@ -13,7 +13,7 @@ export function resolveTenantId(c: Context<{ Bindings: WorkerEnv }>): string {
 }
 
 /**
- * Resolves the authenticated user ID from context or request headers.
+ * Resolves the authenticated user ID from context, session cookie, or fallback headers.
  */
 export function resolveUserId(c: Context<{ Bindings: WorkerEnv }>): string {
   const fromVar = (c as unknown as { get: (key: string) => unknown }).get?.('userId');

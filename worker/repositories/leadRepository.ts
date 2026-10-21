@@ -1,24 +1,30 @@
 import type {
   Lead,
   LeadStatus,
+  ServiceVertical,
+  LocationContext,
   InternalNote,
 } from '@shared/types/crm.types';
 import type { UpdateLeadSchemaType, CreateLeadSchemaType } from '@shared/schemas/lead.schema';
 
 export interface LeadListFilters {
   status?: LeadStatus | undefined;
-  destinationCountry?: string | undefined;
+  serviceVertical?: ServiceVertical | undefined;
+  uaeLocationContext?: LocationContext | undefined;
   search?: string | undefined;
-  minScore?: number | undefined;
-  maxScore?: number | undefined;
-  sortBy?: ('score' | 'recent') | undefined;
+  sortBy?: ('recent' | 'status') | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
+
+  // Legacy fallback compatibility
+  destinationCountry?: string | undefined;
+  minScore?: number | undefined;
+  maxScore?: number | undefined;
 }
 
 export class LeadRepository {
   /**
-   * Retrieves paginated leads using idx_leads_pipeline. CPU: < 1.0 ms.
+   * Retrieves paginated leads using idx_leads_pipeline or idx_leads_vertical. CPU: < 1.0 ms.
    */
   async listLeads(
     db: D1Database,
@@ -30,11 +36,12 @@ export class LeadRepository {
 
     let query = `
       SELECT 
-        id, tenant_id, full_name, residence_country, destination_country,
-        visa_category, education, work_experience, language_test, timeline,
-        budget_range, phone_or_email, lead_score, score_breakdown_json,
-        lead_status, human_review_reason, owner_id, last_qualified_at,
-        created_at, updated_at
+        id, tenant_id, full_name, phone_or_email, service_vertical, residency_intent,
+        work_business_activity, uae_location_context, target_emirate, timeline,
+        detected_language, contact_method_preference, contact_permission,
+        external_sharing_permission, lead_status, status_reason, missing_details_json,
+        questions_answered_json, assigned_expert_id, owner_id, next_action,
+        next_action_owner, summary, last_qualified_at, created_at, updated_at
       FROM leads
       WHERE tenant_id = ?
     `;
@@ -46,58 +53,27 @@ export class LeadRepository {
       bindings.push(filters.status);
     }
 
-    if (filters.destinationCountry) {
-      query += ' AND destination_country = ?';
-      bindings.push(filters.destinationCountry);
+    if (filters.serviceVertical && filters.serviceVertical !== 'unspecified') {
+      query += ' AND service_vertical = ?';
+      bindings.push(filters.serviceVertical);
     }
 
-    if (filters.minScore !== undefined) {
-      query += ' AND lead_score >= ?';
-      bindings.push(filters.minScore);
-    }
-
-    if (filters.maxScore !== undefined) {
-      query += ' AND lead_score <= ?';
-      bindings.push(filters.maxScore);
+    if (filters.uaeLocationContext && filters.uaeLocationContext !== 'unknown') {
+      query += ' AND uae_location_context = ?';
+      bindings.push(filters.uaeLocationContext);
     }
 
     if (filters.search) {
-      query += ' AND (full_name LIKE ? OR phone_or_email LIKE ? OR visa_category LIKE ?)';
-      bindings.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
+      query += ' AND (full_name LIKE ? OR phone_or_email LIKE ? OR work_business_activity LIKE ? OR target_emirate LIKE ? OR summary LIKE ?)';
+      bindings.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
     }
 
-    if (filters.sortBy === 'recent') {
-      query += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
-    } else {
-      query += ' ORDER BY lead_score DESC, updated_at DESC LIMIT ? OFFSET ?';
-    }
-
+    query += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
     bindings.push(limit, offset);
 
     const rows = await db.prepare(query).bind(...bindings).all<any>();
 
-    return (rows.results || []).map((row) => ({
-      id: row.id,
-      tenantId: row.tenant_id,
-      fullName: row.full_name || null,
-      residenceCountry: row.residence_country || null,
-      destinationCountry: row.destination_country || null,
-      visaCategory: row.visa_category || null,
-      education: row.education || null,
-      workExperience: row.work_experience || null,
-      languageTest: row.language_test || null,
-      timeline: row.timeline || null,
-      budgetRange: row.budget_range || null,
-      phoneOrEmail: row.phone_or_email || null,
-      leadScore: Number(row.lead_score || 0),
-      scoreBreakdown: row.score_breakdown_json ? JSON.parse(row.score_breakdown_json) : null,
-      leadStatus: row.lead_status,
-      humanReviewReason: row.human_review_reason || null,
-      ownerId: row.owner_id || null,
-      lastQualifiedAt: row.last_qualified_at ? Number(row.last_qualified_at) : null,
-      createdAt: Number(row.created_at),
-      updatedAt: Number(row.updated_at),
-    }));
+    return (rows.results || []).map((row) => this.mapRowToLead(row));
   }
 
   /**
@@ -111,11 +87,12 @@ export class LeadRepository {
     const row = await db
       .prepare(
         `SELECT 
-          id, tenant_id, full_name, residence_country, destination_country,
-          visa_category, education, work_experience, language_test, timeline,
-          budget_range, phone_or_email, lead_score, score_breakdown_json,
-          lead_status, human_review_reason, owner_id, last_qualified_at,
-          created_at, updated_at
+          id, tenant_id, full_name, phone_or_email, service_vertical, residency_intent,
+          work_business_activity, uae_location_context, target_emirate, timeline,
+          detected_language, contact_method_preference, contact_permission,
+          external_sharing_permission, lead_status, status_reason, missing_details_json,
+          questions_answered_json, assigned_expert_id, owner_id, next_action,
+          next_action_owner, summary, last_qualified_at, created_at, updated_at
         FROM leads
         WHERE tenant_id = ? AND id = ?`
       )
@@ -133,32 +110,13 @@ export class LeadRepository {
     const linkedConversationIds = (links.results || []).map((l) => l.conversation_id);
 
     return {
-      id: row.id,
-      tenantId: row.tenant_id,
-      fullName: row.full_name || null,
-      residenceCountry: row.residence_country || null,
-      destinationCountry: row.destination_country || null,
-      visaCategory: row.visa_category || null,
-      education: row.education || null,
-      workExperience: row.work_experience || null,
-      languageTest: row.language_test || null,
-      timeline: row.timeline || null,
-      budgetRange: row.budget_range || null,
-      phoneOrEmail: row.phone_or_email || null,
-      leadScore: Number(row.lead_score || 0),
-      scoreBreakdown: row.score_breakdown_json ? JSON.parse(row.score_breakdown_json) : null,
-      leadStatus: row.lead_status,
-      humanReviewReason: row.human_review_reason || null,
-      ownerId: row.owner_id || null,
-      lastQualifiedAt: row.last_qualified_at ? Number(row.last_qualified_at) : null,
-      createdAt: Number(row.created_at),
-      updatedAt: Number(row.updated_at),
+      ...this.mapRowToLead(row),
       linkedConversationIds,
     };
   }
 
   /**
-   * Updates lead profile attributes.
+   * Updates lead profile attributes with audit evidence.
    */
   async updateLead(
     db: D1Database,
@@ -173,53 +131,88 @@ export class LeadRepository {
       fields.push('full_name = ?');
       bindings.push(updates.fullName);
     }
-    if (updates.residenceCountry !== undefined) {
-      fields.push('residence_country = ?');
-      bindings.push(updates.residenceCountry);
+    if (updates.phoneOrEmail !== undefined) {
+      fields.push('phone_or_email = ?');
+      bindings.push(updates.phoneOrEmail);
+    } else if (updates.phoneNumber !== undefined) {
+      fields.push('phone_or_email = ?');
+      bindings.push(updates.phoneNumber);
     }
-    if (updates.destinationCountry !== undefined) {
-      fields.push('destination_country = ?');
-      bindings.push(updates.destinationCountry);
+    if (updates.serviceVertical !== undefined) {
+      fields.push('service_vertical = ?');
+      bindings.push(updates.serviceVertical);
     }
-    if (updates.visaCategory !== undefined) {
-      fields.push('visa_category = ?');
-      bindings.push(updates.visaCategory);
+    if (updates.residencyIntent !== undefined) {
+      fields.push('residency_intent = ?');
+      bindings.push(updates.residencyIntent);
     }
-    if (updates.education !== undefined) {
-      fields.push('education = ?');
-      bindings.push(updates.education);
+    if (updates.workBusinessActivity !== undefined) {
+      fields.push('work_business_activity = ?');
+      bindings.push(updates.workBusinessActivity);
     }
-    if (updates.workExperience !== undefined) {
-      fields.push('work_experience = ?');
-      bindings.push(updates.workExperience);
+    if (updates.uaeLocationContext !== undefined) {
+      fields.push('uae_location_context = ?');
+      bindings.push(updates.uaeLocationContext);
     }
-    if (updates.languageTest !== undefined) {
-      fields.push('language_test = ?');
-      bindings.push(updates.languageTest);
+    if (updates.targetEmirate !== undefined) {
+      fields.push('target_emirate = ?');
+      bindings.push(updates.targetEmirate);
     }
     if (updates.timeline !== undefined) {
       fields.push('timeline = ?');
       bindings.push(updates.timeline);
     }
-    if (updates.budgetRange !== undefined) {
-      fields.push('budget_range = ?');
-      bindings.push(updates.budgetRange);
+    if (updates.detectedLanguage !== undefined) {
+      fields.push('detected_language = ?');
+      bindings.push(updates.detectedLanguage);
     }
-    if (updates.phoneOrEmail !== undefined) {
-      fields.push('phone_or_email = ?');
-      bindings.push(updates.phoneOrEmail);
+    if (updates.contactMethodPreference !== undefined) {
+      fields.push('contact_method_preference = ?');
+      bindings.push(updates.contactMethodPreference);
     }
-    if (updates.leadScore !== undefined) {
-      fields.push('lead_score = ?');
-      bindings.push(updates.leadScore);
+    if (updates.contactPermission !== undefined) {
+      fields.push('contact_permission = ?');
+      bindings.push(updates.contactPermission ? 1 : 0);
+    }
+    if (updates.externalSharingPermission !== undefined) {
+      fields.push('external_sharing_permission = ?');
+      bindings.push(updates.externalSharingPermission ? 1 : 0);
     }
     if (updates.leadStatus !== undefined) {
       fields.push('lead_status = ?');
       bindings.push(updates.leadStatus);
     }
+    if (updates.statusReason !== undefined) {
+      fields.push('status_reason = ?');
+      bindings.push(updates.statusReason);
+    }
+    if (updates.missingDetails !== undefined) {
+      fields.push('missing_details_json = ?');
+      bindings.push(JSON.stringify(updates.missingDetails));
+    }
+    if (updates.questionsAnswered !== undefined) {
+      fields.push('questions_answered_json = ?');
+      bindings.push(JSON.stringify(updates.questionsAnswered));
+    }
+    if (updates.assignedExpertId !== undefined) {
+      fields.push('assigned_expert_id = ?');
+      bindings.push(updates.assignedExpertId);
+    }
     if (updates.ownerId !== undefined) {
       fields.push('owner_id = ?');
       bindings.push(updates.ownerId);
+    }
+    if (updates.nextAction !== undefined) {
+      fields.push('next_action = ?');
+      bindings.push(updates.nextAction);
+    }
+    if (updates.nextActionOwner !== undefined) {
+      fields.push('next_action_owner = ?');
+      bindings.push(updates.nextActionOwner);
+    }
+    if (updates.summary !== undefined) {
+      fields.push('summary = ?');
+      bindings.push(updates.summary);
     }
 
     if (fields.length === 0) {
@@ -241,7 +234,7 @@ export class LeadRepository {
   }
 
   /**
-   * Creates a new lead manually.
+   * Creates a new RESIDER lead manually or from qualification.
    */
   async createLead(
     db: D1Database,
@@ -254,25 +247,38 @@ export class LeadRepository {
     await db
       .prepare(
         `INSERT INTO leads (
-          id, tenant_id, full_name, residence_country, destination_country,
-          visa_category, education, work_experience, timeline, budget_range,
-          phone_or_email, lead_score, lead_status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          id, tenant_id, full_name, phone_or_email, service_vertical, residency_intent,
+          work_business_activity, uae_location_context, target_emirate, timeline,
+          detected_language, contact_method_preference, contact_permission,
+          external_sharing_permission, lead_status, status_reason, missing_details_json,
+          questions_answered_json, assigned_expert_id, owner_id, next_action,
+          next_action_owner, summary, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         id,
         tenantId,
         data.fullName,
-        data.residenceCountry || null,
-        data.destinationCountry || null,
-        data.visaCategory || null,
-        data.education || null,
-        data.workExperience || null,
+        data.phoneOrEmail || data.phoneNumber || null,
+        data.serviceVertical || 'unspecified',
+        data.residencyIntent || 'unspecified',
+        data.workBusinessActivity || null,
+        data.uaeLocationContext || 'unknown',
+        data.targetEmirate || null,
         data.timeline || null,
-        data.budgetRange || null,
-        data.phoneOrEmail || null,
-        data.leadScore || 0,
-        data.leadStatus || 'new',
+        data.detectedLanguage || 'en',
+        data.contactMethodPreference || null,
+        data.contactPermission ? 1 : 0,
+        data.externalSharingPermission ? 1 : 0,
+        data.leadStatus || 'needs_clarification',
+        data.statusReason || null,
+        JSON.stringify(data.missingDetails || []),
+        JSON.stringify(data.questionsAnswered || []),
+        data.assignedExpertId || null,
+        data.ownerId || null,
+        data.nextAction || null,
+        data.nextActionOwner || null,
+        data.summary || null,
         now,
         now
       )
@@ -353,6 +359,52 @@ export class LeadRepository {
       authorId: params.authorId,
       content: params.content,
       createdAt: now,
+    };
+  }
+
+  private mapRowToLead(row: any): Lead {
+    let missingDetails: string[] = [];
+    try {
+      if (row.missing_details_json) {
+        missingDetails = JSON.parse(row.missing_details_json);
+      }
+    } catch {}
+
+    let questionsAnswered: string[] = [];
+    try {
+      if (row.questions_answered_json) {
+        questionsAnswered = JSON.parse(row.questions_answered_json);
+      }
+    } catch {}
+
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      fullName: row.full_name || null,
+      phoneOrEmail: row.phone_or_email || null,
+      phoneNumber: row.phone_or_email || null,
+      serviceVertical: row.service_vertical || 'unspecified',
+      residencyIntent: row.residency_intent || 'unspecified',
+      workBusinessActivity: row.work_business_activity || null,
+      uaeLocationContext: row.uae_location_context || 'unknown',
+      targetEmirate: row.target_emirate || null,
+      timeline: row.timeline || null,
+      detectedLanguage: row.detected_language || 'en',
+      contactMethodPreference: row.contact_method_preference || null,
+      contactPermission: row.contact_permission === 1,
+      externalSharingPermission: row.external_sharing_permission === 1,
+      leadStatus: row.lead_status || 'needs_clarification',
+      statusReason: row.status_reason || null,
+      missingDetails,
+      questionsAnswered,
+      assignedExpertId: row.assigned_expert_id || null,
+      ownerId: row.owner_id || null,
+      nextAction: row.next_action || null,
+      nextActionOwner: row.next_action_owner || null,
+      summary: row.summary || null,
+      lastQualifiedAt: row.last_qualified_at ? Number(row.last_qualified_at) : null,
+      createdAt: Number(row.created_at),
+      updatedAt: Number(row.updated_at),
     };
   }
 }

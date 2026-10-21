@@ -18,21 +18,15 @@ export const leadRoutes = new Hono<{ Bindings: WorkerEnv }>();
 leadRoutes.get('/', async (c) => {
   const tenantId = resolveTenantId(c);
   const status = c.req.query('status') as LeadStatus | undefined;
-  const destinationCountry = c.req.query('country') || undefined;
+  const serviceVertical = c.req.query('vertical') as any;
   const search = c.req.query('search') || undefined;
-  const minScoreParam = c.req.query('minScore');
-  const maxScoreParam = c.req.query('maxScore');
-  const sortBy = c.req.query('sortBy') as 'score' | 'recent' | undefined;
-
-  const minScore = minScoreParam ? parseInt(minScoreParam, 10) : undefined;
-  const maxScore = maxScoreParam ? parseInt(maxScoreParam, 10) : undefined;
+  const sortByParam = c.req.query('sortBy');
+  const sortBy = (sortByParam === 'status' ? 'status' : 'recent') as 'status' | 'recent' | undefined;
 
   const leads = await leadRepository.listLeads(c.env.DB, tenantId, {
     status,
-    destinationCountry,
+    serviceVertical,
     search,
-    minScore,
-    maxScore,
     sortBy,
   });
 

@@ -1,5 +1,7 @@
-import { ShieldCheck, Activity } from 'lucide-react';
+import { ShieldCheck, Activity, LogOut } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/AuthContext';
 import type { NavItemKey } from './Sidebar';
 
 interface HeaderProps {
@@ -35,6 +37,7 @@ const titles: Record<NavItemKey, { title: string; subtitle: string }> = {
 
 export function Header({ currentTab }: HeaderProps) {
   const current = titles[currentTab] || { title: 'Dashboard', subtitle: '' };
+  const { user, logout } = useAuth();
 
   return (
     <header className="h-16 border-b border-border bg-card/20 backdrop-blur-md px-8 flex items-center justify-between shrink-0">
@@ -43,12 +46,12 @@ export function Header({ currentTab }: HeaderProps) {
         <p className="text-xs text-muted-foreground mt-1">{current.subtitle}</p>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {/* System Health Status Badge */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/50 border border-border text-xs">
           <Activity className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-muted-foreground">Workers Edge:</span>
-          <span className="font-semibold text-foreground">p95 &lt; 2.5ms</span>
+          <span className="text-muted-foreground">Edge CPU:</span>
+          <span className="font-semibold text-foreground">&lt; 1.5ms</span>
         </div>
 
         {/* AI Master State Indicator */}
@@ -56,6 +59,24 @@ export function Header({ currentTab }: HeaderProps) {
           <ShieldCheck className="w-3.5 h-3.5" />
           AI Master ON
         </Badge>
+
+        {/* User Info & Logout */}
+        {user && (
+          <div className="flex items-center gap-2 pl-2 border-l border-border">
+            <span className="text-xs font-medium text-foreground hidden md:inline">
+              {user.email}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              title="Sign Out"
+              className="text-xs h-8 px-2 text-muted-foreground hover:text-destructive"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
     </header>
   );

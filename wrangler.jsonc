@@ -15,7 +15,7 @@
     {
       "binding": "DB",
       "database_name": "nexo-db",
-      "database_id": "nexo-local-db-id",
+      "database_id": "784c871e-2440-49ee-901e-d2f56d6e2d41",
       "migrations_dir": "migrations"
     }
   ],

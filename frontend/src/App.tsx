@@ -9,10 +9,11 @@ import { LeadsView } from './views/LeadsView';
 import { AIAutomationView } from './views/AIAutomationView';
 import { IntegrationsView } from './views/IntegrationsView';
 import { SettingsView } from './views/SettingsView';
-
+import { LoginView } from './views/LoginView';
+import { AuthProvider, useAuth } from './lib/AuthContext';
 import { useConversations } from './hooks/useConversations';
 
-function AppContent() {
+function Dashboard() {
   const [currentTab, setCurrentTab] = React.useState<NavItemKey>('overview');
   const [inboxConversationId, setInboxConversationId] = React.useState<string | null>(null);
 
@@ -59,12 +60,33 @@ function AppContent() {
   );
 }
 
+function MainContent() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background text-muted-foreground text-xs font-mono">
+        Authenticating session &lt; 2ms...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginView />;
+  }
+
+  return <Dashboard />;
+}
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <AuthProvider>
+        <MainContent />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
 
 export default App;
+

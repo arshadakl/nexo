@@ -48,55 +48,71 @@ export interface Message {
   createdAt: number;
 }
 
+/**
+ * RESIDER Official Lead Statuses (Section 6)
+ */
 export type LeadStatus =
-  | 'new'
-  | 'collecting_information'
-  | 'qualified'
-  | 'consultation_booked'
-  | 'converted'
-  | 'unqualified'
-  | 'spam_irrelevant'
-  | 'needs_human_review'
-  | 'closed_lost';
+  | 'needs_clarification'
+  | 'exploring'
+  | 'ready_for_team'
+  | 'handover_requested'
+  | 'handed_over'
+  | 'support_enquiry'
+  | 'outside_scope_spam';
 
-export interface LeadScoreBreakdown {
-  intentScore: number;
-  completenessScore: number;
-  readinessScore: number;
-  timelineFitScore: number;
-  engagementScore: number;
-}
+export type ServiceVertical = 'residency' | 'business_setup' | 'both' | 'unspecified';
+
+export type ResidencyIntent =
+  | 'permit_with_residency'
+  | 'residency_only'
+  | 'understanding_options'
+  | 'unspecified';
+
+export type LocationContext = 'inside_uae' | 'outside_uae' | 'undecided' | 'unknown';
+
+export type ContactMethodPreference = 'whatsapp' | 'phone_call' | 'instagram_dm';
 
 export interface Lead {
   id: string;
   tenantId: string;
   fullName?: string | null;
-  residenceCountry?: string | null;
-  destinationCountry?: string | null;
-  visaCategory?: string | null;
-  education?: string | null;
-  workExperience?: string | null;
-  languageTest?: string | null;
-  timeline?: string | null;
-  budgetRange?: string | null;
   phoneOrEmail?: string | null;
-  leadScore: number;
-  scoreBreakdown?: LeadScoreBreakdown | null;
+  serviceVertical: ServiceVertical;
+  residencyIntent: ResidencyIntent;
+  workBusinessActivity?: string | null;
+  uaeLocationContext: LocationContext;
+  targetEmirate?: string | null;
+  timeline?: string | null;
+  detectedLanguage: string;
+  contactMethodPreference?: ContactMethodPreference | null;
+  contactPermission: boolean;
+  externalSharingPermission: boolean;
   leadStatus: LeadStatus;
-  humanReviewReason?: string | null;
+  statusReason?: string | null;
+  missingDetails: string[];
+  questionsAnswered: string[];
+  assignedExpertId?: string | null;
   ownerId?: string | null;
+  nextAction?: string | null;
+  nextActionOwner?: string | null;
+  summary?: string | null;
   lastQualifiedAt?: number | null;
   createdAt: number;
   updatedAt: number;
+
+  // Compatibility getters/fallbacks
+  phoneNumber?: string | null;
 }
 
 export interface LeadSummarySnippet {
   id: string;
   fullName?: string | null;
-  destinationCountry?: string | null;
-  visaCategory?: string | null;
-  leadScore: number;
+  phoneOrEmail?: string | null;
+  serviceVertical: ServiceVertical;
+  residencyIntent: ResidencyIntent;
   leadStatus: LeadStatus;
+  statusReason?: string | null;
+  missingDetails: string[];
 }
 
 export interface ConversationSummary {
@@ -135,6 +151,10 @@ export interface SetAIModeRequest {
   aiMode: ConversationAIMode;
 }
 
+export interface CreateNoteRequest {
+  content: string;
+}
+
 export interface InternalNote {
   id: string;
   tenantId: string;
@@ -144,8 +164,4 @@ export interface InternalNote {
   authorName?: string | null;
   content: string;
   createdAt: number;
-}
-
-export interface CreateNoteRequest {
-  content: string;
 }

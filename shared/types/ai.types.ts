@@ -82,35 +82,42 @@ export interface AIProviderPreset {
   customHeaders?: Record<string, string> | undefined;
 }
 
+import type { LeadStatus, ServiceVertical, ResidencyIntent, LocationContext, ContactMethodPreference } from './crm.types';
+
 export interface AIQualificationResult {
-  intent: 'study' | 'work' | 'visitor' | 'permanent_residency' | 'family' | 'other' | 'unknown';
-  language: string;
+  intent: 'residency' | 'business_setup' | 'both' | 'general_enquiry' | 'human_request' | 'support_status' | 'outside_scope_spam' | 'unknown';
+  language: string; // 'en' | 'ml' etc.
+  toneMirroring?: string | null; // e.g. 'casual_bro' | 'polite_formal'
   replyText: string | null;
+  rationale?: string | null;
   extractedFields: {
     fullName?: string | undefined;
-    residenceCountry?: string | undefined;
-    destinationCountry?: string | undefined;
-    visaCategory?: string | undefined;
-    education?: string | undefined;
-    workExperience?: string | undefined;
-    languageTest?: string | undefined;
-    timeline?: string | undefined;
-    budgetRange?: string | undefined;
     phoneOrEmail?: string | undefined;
+    serviceVertical?: ServiceVertical | undefined;
+    residencyIntent?: ResidencyIntent | undefined;
+    workBusinessActivity?: string | undefined;
+    uaeLocationContext?: LocationContext | undefined;
+    targetEmirate?: string | undefined;
+    timeline?: string | undefined;
+    contactMethodPreference?: ContactMethodPreference | undefined;
+    contactPermission?: boolean | undefined;
+    externalSharingPermission?: boolean | undefined;
+    
+    // Legacy fallback compatibility
+    phoneNumber?: string | undefined;
   };
-  fieldConfidence: Record<string, number>;
+  fieldConfidence?: Record<string, number>;
   missingFields: string[];
-  nextQuestion: string | null;
-  leadScore: number;
-  scoreComponents: {
-    intentScore: number;
-    completenessScore: number;
-    readinessScore: number;
-    timelineFitScore: number;
-    engagementScore: number;
+  questionsAnswered?: string[];
+  leadStatus: LeadStatus;
+  statusReason: string;
+  expertMatchCriteria?: {
+    sector?: string | null;
+    language?: string | null;
+    location?: string | null;
   };
-  leadStatus: 'collecting_information' | 'qualified' | 'needs_human_review' | 'unqualified' | 'spam_irrelevant';
   humanReviewRequired: boolean;
   humanReviewReason?: string | undefined;
   safetyFlags: string[];
 }
+

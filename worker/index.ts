@@ -18,10 +18,12 @@ app.use('*', securityHeaders);
 app.onError(errorHandler);
 
 import { whatsappRoutes } from './routes/whatsapp.routes';
-
 import { analyticsRoutes } from './routes/analytics.routes';
+import { authRoutes } from './routes/auth.routes';
+import { privacyRoutes } from './routes/privacy.routes';
 
-// Mount API routes
+// Mount public and API routes
+app.route('/api/auth', authRoutes);
 app.route('/api', healthRoutes);
 app.route('/api/ai', aiProviderRoutes);
 app.route('/api/integrations/whatsapp', whatsappRoutes);
@@ -30,9 +32,7 @@ app.route('/api/conversations', conversationRoutes);
 app.route('/api/leads', leadRoutes);
 app.route('/api/analytics', analyticsRoutes);
 app.route('/webhooks', webhookRoutes);
-
-
-
+app.route('/', privacyRoutes);
 
 // Fallback 404 for unknown API endpoints
 app.all('/api/*', (c) => {
@@ -53,10 +53,15 @@ import { tokenRefreshService } from './services/tokenRefreshService';
 
 // Single Cloudflare Worker Export: fetch, queue, scheduled
 export default {
-  // HTTP Fetch handler: routes API & webhooks to Hono, all else to Workers Static Assets (React SPA)
+  // HTTP Fetch handler: routes API, webhooks & privacy pages to Hono, all else to Workers Static Assets (React SPA)
   async fetch(request: Request, env: WorkerEnv, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname.startsWith('/api') || url.pathname.startsWith('/webhooks')) {
+    if (
+      url.pathname.startsWith('/api') ||
+      url.pathname.startsWith('/webhooks') ||
+      url.pathname === '/privacy-policy' ||
+      url.pathname === '/terms'
+    ) {
       return app.fetch(request, env, ctx);
     }
 

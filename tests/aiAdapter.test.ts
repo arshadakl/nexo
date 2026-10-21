@@ -20,27 +20,22 @@ describe('OpenAICompatibleAdapter', () => {
   };
 
   const sampleValidStructuredOutput = {
-    intent: 'study',
+    intent: 'residency',
     language: 'en',
-    replyText: 'Hello! Are you planning for university or college in Canada?',
+    replyText: 'Hey! Are you looking for residency only, or a permit with residency?',
+    rationale: 'Clarifying permit requirement',
     extractedFields: {
-      destinationCountry: 'Canada',
-      visaCategory: 'student_visa',
+      serviceVertical: 'residency',
+      residencyIntent: 'understanding_options',
+      uaeLocationContext: 'inside_uae',
     },
     fieldConfidence: {
-      destinationCountry: 0.9,
+      serviceVertical: 0.95,
     },
     missingFields: ['timeline'],
-    nextQuestion: 'What is your intended start date?',
-    leadScore: 60,
-    scoreComponents: {
-      intentScore: 20,
-      completenessScore: 15,
-      readinessScore: 10,
-      timelineFitScore: 10,
-      engagementScore: 5,
-    },
-    leadStatus: 'collecting_information',
+    questionsAnswered: ['uaeLocationContext'],
+    leadStatus: 'exploring',
+    statusReason: 'Lead asked about residency options from within UAE',
     humanReviewRequired: false,
     safetyFlags: [],
   };
@@ -70,12 +65,12 @@ describe('OpenAICompatibleAdapter', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     const result = await adapter.generateQualification(mockConfig, [
-      { role: 'user', content: 'I want to study in Canada' },
+      { role: 'user', content: 'I need UAE residency options' },
     ]);
 
-    expect(result.intent).toBe('study');
-    expect(result.extractedFields.destinationCountry).toBe('Canada');
-    expect(result.leadScore).toBe(60);
+    expect(result.intent).toBe('residency');
+    expect(result.extractedFields.serviceVertical).toBe('residency');
+    expect(result.leadStatus).toBe('exploring');
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
     const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
@@ -178,8 +173,8 @@ describe('OpenAICompatibleAdapter', () => {
       { role: 'user', content: 'I want to study in Germany' },
     ]);
 
-    expect(result.intent).toBe('study');
-    expect(result.extractedFields.destinationCountry).toBe('Canada');
-    expect(result.leadScore).toBe(60);
+    expect(result.intent).toBe('residency');
+    expect(result.extractedFields.serviceVertical).toBe('residency');
+    expect(result.leadStatus).toBe('exploring');
   });
 });

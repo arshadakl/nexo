@@ -181,3 +181,28 @@ export function useAddConversationNote(conversationId: string | null) {
     },
   });
 }
+
+export function useClearConversationHistory(conversationId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ success: boolean; conversationId: string; message: string }>(
+        `/api/conversations/${conversationId}/messages`,
+        {
+          method: 'DELETE',
+        }
+      ),
+    onSuccess: () => {
+      if (!conversationId) return;
+
+      // Instantly clear messages in cache
+      queryClient.setQueryData(queryKeys.conversations.messages(conversationId), []);
+
+      // Invalidate detail and list to refresh lead context and preview
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.detail(conversationId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.leads.all });
+    },
+  });
+}

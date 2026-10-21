@@ -26,7 +26,7 @@ integrationRoutes.post('/instagram/connect', async (c) => {
   const tenantId = resolveTenantId(c);
   const userId = resolveUserId(c);
 
-  const appId = c.env.META_APP_ID || '123456789012345';
+  const appId = c.env.INSTAGRAM_APP_ID || c.env.META_APP_ID || '123456789012345';
   const origin = new URL(c.req.url).origin;
 
   const result = await instagramService.initiateOAuth(
@@ -77,8 +77,8 @@ integrationRoutes.get('/instagram/callback', async (c) => {
 
   try {
     const origin = new URL(c.req.url).origin;
-    const appId = c.env.META_APP_ID || '123456789012345';
-    const appSecret = c.env.META_APP_SECRET || 'dev_app_secret_123';
+    const appId = c.env.INSTAGRAM_APP_ID || c.env.META_APP_ID || '123456789012345';
+    const appSecret = c.env.INSTAGRAM_APP_SECRET || c.env.META_APP_SECRET || 'dev_app_secret_123';
     const masterKey = getMasterKey(c);
 
     const result = await instagramService.completeOAuth(c.env.DB, {

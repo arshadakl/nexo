@@ -1,39 +1,59 @@
 import { z } from 'zod';
+import {
+  LeadStatusEnum,
+  ServiceVerticalEnum,
+  ResidencyIntentEnum,
+  LocationContextEnum,
+  ContactMethodPreferenceEnum,
+} from './lead.schema';
 
 export const AIQualificationResultSchema = z.object({
-  intent: z.enum(['study', 'work', 'visitor', 'permanent_residency', 'family', 'other', 'unknown']),
+  intent: z
+    .enum([
+      'residency',
+      'business_setup',
+      'both',
+      'general_enquiry',
+      'human_request',
+      'support_status',
+      'outside_scope_spam',
+      'unknown',
+    ])
+    .default('unknown'),
   language: z.string().default('en'),
+  toneMirroring: z.string().nullable().optional(),
   replyText: z.string().nullable(),
-  extractedFields: z.object({
-    fullName: z.string().optional(),
-    residenceCountry: z.string().optional(),
-    destinationCountry: z.string().optional(),
-    visaCategory: z.string().optional(),
-    education: z.string().optional(),
-    workExperience: z.string().optional(),
-    languageTest: z.string().optional(),
-    timeline: z.string().optional(),
-    budgetRange: z.string().optional(),
-    phoneOrEmail: z.string().optional(),
-  }).default({}),
+  rationale: z.string().nullable().optional(),
+  extractedFields: z
+    .object({
+      fullName: z.string().optional(),
+      phoneOrEmail: z.string().optional(),
+      serviceVertical: ServiceVerticalEnum.optional(),
+      residencyIntent: ResidencyIntentEnum.optional(),
+      workBusinessActivity: z.string().optional(),
+      uaeLocationContext: LocationContextEnum.optional(),
+      targetEmirate: z.string().optional(),
+      timeline: z.string().optional(),
+      contactMethodPreference: ContactMethodPreferenceEnum.optional(),
+      contactPermission: z.boolean().optional(),
+      externalSharingPermission: z.boolean().optional(),
+
+      // Compatibility fallback
+      phoneNumber: z.string().optional(),
+    })
+    .default({}),
   fieldConfidence: z.record(z.number().min(0).max(1)).default({}),
   missingFields: z.array(z.string()).default([]),
-  nextQuestion: z.string().nullable().default(null),
-  leadScore: z.number().min(0).max(100).default(0),
-  scoreComponents: z.object({
-    intentScore: z.number().min(0).max(25).default(0),
-    completenessScore: z.number().min(0).max(25).default(0),
-    readinessScore: z.number().min(0).max(20).default(0),
-    timelineFitScore: z.number().min(0).max(15).default(0),
-    engagementScore: z.number().min(0).max(15).default(0),
-  }).default({}),
-  leadStatus: z.enum([
-    'collecting_information',
-    'qualified',
-    'needs_human_review',
-    'unqualified',
-    'spam_irrelevant',
-  ]).default('collecting_information'),
+  questionsAnswered: z.array(z.string()).default([]),
+  leadStatus: LeadStatusEnum.default('needs_clarification'),
+  statusReason: z.string().default(''),
+  expertMatchCriteria: z
+    .object({
+      sector: z.string().nullable().optional(),
+      language: z.string().nullable().optional(),
+      location: z.string().nullable().optional(),
+    })
+    .optional(),
   humanReviewRequired: z.boolean().default(false),
   humanReviewReason: z.string().optional(),
   safetyFlags: z.array(z.string()).default([]),

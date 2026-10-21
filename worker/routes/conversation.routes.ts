@@ -282,3 +282,34 @@ conversationRoutes.post('/:id/notes', async (c) => {
 
   return jsonOk(c, note);
 });
+
+/**
+ * DELETE /api/conversations/:id/messages
+ * Clears all messages and lead data for a conversation so next incoming message is treated as a new lead.
+ */
+conversationRoutes.delete('/:id/messages', async (c) => {
+  const tenantId = resolveTenantId(c);
+  const conversationId = c.req.param('id');
+
+  const conversation = await conversationRepository.getConversationById(
+    c.env.DB,
+    tenantId,
+    conversationId
+  );
+
+  if (!conversation) {
+    return jsonError(c, 'NOT_FOUND', 'Conversation not found', 404);
+  }
+
+  await conversationRepository.clearConversationHistory(
+    c.env.DB,
+    tenantId,
+    conversationId
+  );
+
+  return jsonOk(c, {
+    success: true,
+    conversationId,
+    message: 'Chat history cleared. Future messages will be treated as a new lead inquiry.',
+  });
+});

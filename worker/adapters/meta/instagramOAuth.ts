@@ -163,6 +163,55 @@ export class InstagramOAuthAdapter {
     const data = (await res.json()) as any;
     return Boolean(data.success);
   }
+
+  /**
+   * Fetches Instagram User Profile (username, name, profile_pic) of the person messaging.
+   */
+  async fetchUserProfile(
+    accessToken: string,
+    userId: string
+  ): Promise<{ username?: string; name?: string; profilePic?: string } | null> {
+    try {
+      // Query Instagram Graph API for sender metadata
+      const url = new URL(`https://graph.instagram.com/${this.graphApiVersion}/${userId}`);
+      url.searchParams.set('fields', 'id,username,name,profile_pic');
+      url.searchParams.set('access_token', accessToken);
+
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (!res.ok) {
+        // Fallback to legacy endpoint if required
+        const fbUrl = new URL(`https://graph.facebook.com/${this.graphApiVersion}/${userId}`);
+        fbUrl.searchParams.set('fields', 'id,username,name,profile_pic');
+        fbUrl.searchParams.set('access_token', accessToken);
+
+        const fbRes = await fetch(fbUrl.toString(), {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000),
+        });
+
+        if (!fbRes.ok) return null;
+        const fbData = (await fbRes.json()) as any;
+        return {
+          username: fbData.username || undefined,
+          name: fbData.name || undefined,
+          profilePic: fbData.profile_pic || undefined,
+        };
+      }
+
+      const data = (await res.json()) as any;
+      return {
+        username: data.username || undefined,
+        name: data.name || undefined,
+        profilePic: data.profile_pic || undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
 }
 
 export const instagramOAuthAdapter = new InstagramOAuthAdapter();

@@ -51,6 +51,7 @@ describe('Queue Consumer Unit Tests', () => {
       prepare: vi.fn().mockReturnValue({
         bind: vi.fn().mockReturnValue({
           first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
         }),
       }),
     };

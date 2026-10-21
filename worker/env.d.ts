@@ -12,6 +12,8 @@ export interface WorkerEnv {
   SESSION_SECRET?: string;
   META_APP_ID?: string;
   META_APP_SECRET?: string;
+  INSTAGRAM_APP_ID?: string;
+  INSTAGRAM_APP_SECRET?: string;
   META_TOKEN_ENCRYPTION_KEY?: string; // 32-byte Base64 key for AES-256-GCM
   WEBHOOK_VERIFY_TOKEN?: string;
 }
