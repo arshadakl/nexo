@@ -21,6 +21,8 @@ export default defineConfig({
         target: 'http://127.0.0.1:8787',
         changeOrigin: true,
       },
+      '/privacy-policy': { target: 'http://127.0.0.1:8787', changeOrigin: true },
+      '/terms': { target: 'http://127.0.0.1:8787', changeOrigin: true },
     },
   },
   build: {

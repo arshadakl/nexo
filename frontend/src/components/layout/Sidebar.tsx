@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react';
 import {
   LayoutDashboard,
   Inbox,
@@ -5,131 +6,101 @@ import {
   Bot,
   Zap,
   Settings,
-  Sparkles,
   UserCheck,
+  ArrowUpRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/lib/AuthContext';
+import { screenPaths, type NavItemKey } from '@/lib/navigation';
+export type { NavItemKey } from '@/lib/navigation';
 
-export type NavItemKey =
-  | 'overview'
-  | 'inbox'
-  | 'leads'
-  | 'experts'
-  | 'ai-automation'
-  | 'integrations'
-  | 'settings';
-
-interface SidebarProps {
+export function Sidebar({
+  currentTab,
+  onTabChange,
+  onNavigate,
+}: {
   currentTab: NavItemKey;
   onTabChange: (tab: NavItemKey) => void;
-  unreadCount?: number;
-}
-
-export function Sidebar({ currentTab, onTabChange, unreadCount = 0 }: SidebarProps) {
-  const navItems = [
-    { key: 'overview' as const, label: 'Overview', icon: LayoutDashboard },
+  onNavigate?: () => void;
+}) {
+  const { user } = useAuth();
+  const groups = [
     {
-      key: 'inbox' as const,
-      label: 'Inbox',
-      icon: Inbox,
-      badge: unreadCount > 0 ? String(unreadCount) : undefined,
+      label: 'Workspace',
+      items: [
+        { key: 'inbox' as const, label: 'Inbox', icon: Inbox },
+        { key: 'leads' as const, label: 'Leads', icon: Users },
+        { key: 'experts' as const, label: 'Partners', icon: UserCheck },
+        { key: 'overview' as const, label: 'Overview', icon: LayoutDashboard },
+      ],
     },
-    { key: 'leads' as const, label: 'Leads Pipeline', icon: Users },
-    { key: 'experts' as const, label: 'Verified Experts', icon: UserCheck },
     {
-      key: 'ai-automation' as const,
-      label: 'AI Automation',
-      icon: Bot,
-      highlight: true,
+      label: 'Manage',
+      items: [
+        { key: 'ai-automation' as const, label: 'AI & knowledge', icon: Bot },
+        { key: 'integrations' as const, label: 'Channels', icon: Zap },
+        { key: 'settings' as const, label: 'Settings', icon: Settings },
+      ],
     },
-    { key: 'integrations' as const, label: 'Integrations', icon: Zap },
-    { key: 'settings' as const, label: 'Settings', icon: Settings },
   ];
-
+  const handleNavigate = (event: MouseEvent<HTMLAnchorElement>, key: NavItemKey) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      return;
+    event.preventDefault();
+    onTabChange(key);
+    onNavigate?.();
+  };
   return (
-    <aside className="w-64 border-r border-border bg-card/40 backdrop-blur-md flex flex-col justify-between shrink-0">
-      <div>
-        {/* Brand / Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-border gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-indigo-400 flex items-center justify-center text-primary-foreground font-bold shadow-md shadow-primary/20">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <div className="font-bold text-base tracking-tight text-foreground flex items-center gap-1.5">
-              Resider
-              <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-                Concierge
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground">UAE Residency & Setup</p>
-          </div>
-        </div>
-
-        {/* Channel Status Quick Glance */}
-        <div className="p-4 mx-3 my-3 rounded-lg bg-secondary/40 border border-border/50 text-xs space-y-2">
-          <div className="flex items-center justify-between text-muted-foreground font-medium">
-            <span>Channels</span>
-            <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              Live
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <Badge variant="instagram" className="text-[11px] py-0 px-2">
-              Instagram DM
-            </Badge>
-            <Badge variant="whatsapp" className="text-[11px] py-0 px-2">
-              WhatsApp
-            </Badge>
-          </div>
-        </div>
-
-        {/* Navigation items */}
-        <nav className="px-3 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentTab === item.key;
-            return (
-              <button
-                key={item.key}
-                onClick={() => onTabChange(item.key)}
-                className={cn(
-                  'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150',
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon className={cn('w-4 h-4', isActive ? 'text-primary-foreground' : 'text-muted-foreground')} />
-                  <span>{item.label}</span>
-                </div>
-                {item.badge && (
-                  <span
-                    className={cn(
-                      'text-xs font-semibold px-2 py-0.5 rounded-full',
-                      isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary text-primary-foreground'
-                    )}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
+    <aside className="flex h-full min-h-0 w-56 shrink-0 flex-col bg-surface-sidebar">
+      <div className="flex h-14 shrink-0 items-center gap-3 px-5">
+        <img src="/resider.svg" alt="" className="size-7" />
+        <span className="text-sm font-semibold">Resider</span>
       </div>
-
-      {/* Tenant / Environment Footer */}
-      <div className="p-4 border-t border-border/80 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground border border-border">
-            RA
+      <nav
+        aria-label="Workspace navigation"
+        className="min-h-0 flex-1 space-y-8 overflow-y-auto px-3 py-5"
+      >
+        {groups.map((group) => (
+          <div key={group.label}>
+            <p className="mb-2 px-2 text-xs font-medium text-muted-foreground">{group.label}</p>
+            <div className="space-y-1">
+              {group.items.map(({ key, label, icon: Icon }) => (
+                <a
+                  key={key}
+                  href={screenPaths[key]}
+                  aria-current={currentTab === key ? 'page' : undefined}
+                  onClick={(event) => handleNavigate(event, key)}
+                  className={cn(
+                    'flex min-h-9 items-center gap-3 rounded-md px-2 py-2 text-[13px] leading-5',
+                    currentTab === key
+                      ? 'bg-surface-selected font-medium text-foreground'
+                      : 'text-content-secondary hover:bg-surface-hover hover:text-foreground',
+                  )}
+                >
+                  <Icon aria-hidden="true" className="size-4 shrink-0" />
+                  {label}
+                </a>
+              ))}
+            </div>
           </div>
-          <div className="truncate">
-            <p className="text-xs font-medium text-foreground truncate">Resider Advisory</p>
-            <p className="text-[10px] text-muted-foreground">Admin Workspace</p>
+        ))}
+      </nav>
+      <div className="space-y-4 border-t border-border p-4">
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          UAE residency & business setup <ArrowUpRight aria-hidden="true" className="size-3" />
+        </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <div
+            aria-hidden="true"
+            className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface-raised text-xs font-medium"
+          >
+            {(user?.name || user?.email || 'R').slice(0, 1).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-medium">{user?.name || user?.email}</p>
+            <p className="truncate text-xs capitalize text-muted-foreground">
+              {user?.role || 'Workspace member'}
+            </p>
           </div>
         </div>
       </div>

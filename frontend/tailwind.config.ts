@@ -16,7 +16,26 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'Noto Sans Malayalam', 'Noto Sans Arabic', 'Noto Sans Devanagari', 'system-ui', '-apple-system', 'sans-serif'],
+      },
       colors: {
+        surface: {
+          base: 'hsl(var(--surface-base) / <alpha-value>)',
+          sidebar: 'hsl(var(--surface-sidebar) / <alpha-value>)',
+          panel: 'hsl(var(--surface-panel) / <alpha-value>)',
+          raised: 'hsl(var(--surface-raised) / <alpha-value>)',
+          hover: 'hsl(var(--surface-hover) / <alpha-value>)',
+          selected: 'hsl(var(--surface-selected) / <alpha-value>)',
+        },
+        content: {
+          primary: 'hsl(var(--text-primary) / <alpha-value>)',
+          secondary: 'hsl(var(--text-secondary) / <alpha-value>)',
+          muted: 'hsl(var(--text-muted) / <alpha-value>)',
+        },
+        success: 'hsl(var(--success) / <alpha-value>)',
+        warning: 'hsl(var(--warning) / <alpha-value>)',
+        danger: 'hsl(var(--danger) / <alpha-value>)',
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
@@ -65,7 +84,7 @@ export default {
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        sm: 'calc(var(--radius) - 2px)',
       },
     },
   },

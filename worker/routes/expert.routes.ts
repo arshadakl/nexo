@@ -154,9 +154,19 @@ expertRoutes.post('/assign', async (c) => {
     return jsonError(c, 'VALIDATION_ERROR', 'leadId and expertId are required', 400);
   }
 
+  const lead = await leadRepository.getLeadById(c.env.DB, tenantId, leadId);
+  if (!lead) return jsonError(c, 'NOT_FOUND', 'Lead profile not found', 404);
+  if (!lead.externalSharingPermission) {
+    return jsonError(c, 'CONSENT_REQUIRED', 'Customer permission to share details is required before assigning a partner.', 409);
+  }
+
   const expert = await expertRepository.getExpertById(c.env.DB, tenantId, expertId);
   if (!expert) {
     return jsonError(c, 'NOT_FOUND', 'Expert not found', 404);
+  }
+
+  if (!expert.isVerified || !expert.isAvailable) {
+    return jsonError(c, 'PARTNER_UNAVAILABLE', 'Choose a verified, available partner.', 409);
   }
 
   const updatedLead = await leadRepository.updateLead(c.env.DB, tenantId, leadId, {

@@ -1,115 +1,116 @@
 import * as React from 'react';
 import {
-  ArrowUpDown,
-  ChevronRight,
   Search,
-  Briefcase,
+  ArrowUpDown,
   RefreshCw,
-  Building2,
-  CheckCircle2,
+  ChevronRight,
 } from 'lucide-react';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLeads } from '@/hooks/useLeads';
 import { LeadDrawer } from '@/components/leads/LeadDrawer';
+import { humanize, leadLabels } from '@/lib/leadPresentation';
+import { absoluteTime } from '@/lib/formatDate';
+import { leadsHref, navigate, type WorkspaceRoute } from '@/lib/navigation';
 import type { LeadStatus } from '@shared/types/crm.types';
 
-function formatRelativeTime(timestamp: number): string {
-  const diffSec = Math.floor((Date.now() - timestamp) / 1000);
-  if (diffSec < 60) return 'just now';
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
-  return `${Math.floor(diffSec / 86400)}d ago`;
-}
-
-function getResiderStatusBadgeClass(status: LeadStatus): string {
-  switch (status) {
-    case 'ready_for_team':
-      return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
-    case 'handed_over':
-      return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30';
-    case 'handover_requested':
-      return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
-    case 'exploring':
-      return 'bg-blue-500/10 text-blue-400 border-blue-500/30';
-    case 'needs_clarification':
-      return 'bg-purple-500/10 text-purple-400 border-purple-500/30';
-    case 'support_enquiry':
-      return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
-    case 'outside_scope_spam':
-      return 'bg-slate-500/10 text-slate-400 border-slate-500/30';
-    default:
-      return 'bg-muted text-muted-foreground border-border';
-  }
-}
-
 interface LeadsViewProps {
+  route?: WorkspaceRoute;
   onNavigateToInbox?: (conversationId?: string) => void;
 }
 
-export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
-  const [selectedLeadId, setSelectedLeadId] = React.useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = React.useState<LeadStatus | 'all'>('all');
+export function LeadsView({ route, onNavigateToInbox }: LeadsViewProps = {}) {
+  const selectedLeadId = route?.leadId ?? null;
+  const selectedStatus = (route?.leadStatus as LeadStatus | 'all') || 'all';
   const [serviceVertical, setServiceVertical] = React.useState<string>('all');
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchQuery, setSearchQuery] = React.useState(route?.search || '');
+  const [debouncedSearch, setDebouncedSearch] = React.useState(route?.search || '');
   const [sortBy, setSortBy] = React.useState<'recent' | 'status'>('recent');
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const {
     data: leads,
     isLoading,
+    isError,
     refetch,
   } = useLeads({
     status: selectedStatus === 'all' ? undefined : selectedStatus,
     serviceVertical: serviceVertical === 'all' ? undefined : serviceVertical,
-    search: searchQuery || undefined,
+    search: debouncedSearch || undefined,
     sortBy,
   });
+
+  const handleSelectLead = (id: string | null) => {
+    navigate(
+      leadsHref({
+        leadId: id,
+        status: selectedStatus,
+        search: debouncedSearch,
+      }),
+    );
+  };
+
+  const handleStatusFilterChange = (newStatus: string) => {
+    navigate(
+      leadsHref({
+        leadId: selectedLeadId,
+        status: newStatus,
+        search: debouncedSearch,
+      }),
+    );
+  };
 
   const toggleSort = () => {
     setSortBy((prev) => (prev === 'recent' ? 'status' : 'recent'));
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full min-h-0 space-y-4">
       {/* Filters & Actions Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div className="flex flex-wrap items-center gap-2">
           {/* Search */}
           <div className="relative w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" aria-hidden="true" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search enquiries, activities..."
-              className="pl-8 h-8 text-xs bg-card"
+              className="pl-8 h-8 text-xs bg-surface-panel border-border"
+              aria-label="Search leads"
             />
           </div>
 
           {/* Canonical Resider Status Filter */}
           <select
             value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value as any)}
-            className="h-8 rounded-md border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            onChange={(e) => handleStatusFilterChange(e.target.value)}
+            className="h-8 rounded-md border border-border bg-surface-panel px-2.5 text-xs text-content-primary focus:outline-none focus:ring-1 focus:ring-accent"
+            aria-label="Filter by status"
           >
-            <option value="all">All Statuses</option>
-            <option value="ready_for_team">Ready for Team</option>
-            <option value="handover_requested">Handover Requested</option>
-            <option value="handed_over">Handed Over</option>
-            <option value="exploring">Exploring Options</option>
-            <option value="needs_clarification">Needs Clarification</option>
-            <option value="support_enquiry">Support Enquiry</option>
-            <option value="outside_scope_spam">Outside Scope / Spam</option>
+            <option value="all">All statuses</option>
+            {Object.entries(leadLabels).map(([statusKey, label]) => (
+              <option key={statusKey} value={statusKey}>
+                {label}
+              </option>
+            ))}
           </select>
 
           {/* Service Vertical Filter */}
           <select
             value={serviceVertical}
             onChange={(e) => setServiceVertical(e.target.value)}
-            className="h-8 rounded-md border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="h-8 rounded-md border border-border bg-surface-panel px-2.5 text-xs text-content-primary focus:outline-none focus:ring-1 focus:ring-accent"
+            aria-label="Filter by service"
           >
-            <option value="all">All Verticals</option>
+            <option value="all">All verticals</option>
             <option value="residency">UAE Residency</option>
             <option value="business_setup">Business Setup</option>
             <option value="both">Residency + Setup</option>
@@ -120,177 +121,156 @@ export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
           <Button
             size="sm"
             variant="outline"
-            className="text-xs h-8 gap-1.5 bg-card"
+            className="text-xs h-8 gap-1.5 bg-surface-panel border-border"
             onClick={toggleSort}
           >
-            <ArrowUpDown className="w-3.5 h-3.5" />
-            <span>Sort: {sortBy === 'recent' ? 'Most Recent' : 'By Status'}</span>
+            <ArrowUpDown className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Sort: {sortBy === 'recent' ? 'Most recent' : 'By status'}</span>
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground font-medium">
-            {leads ? `${leads.length} leads` : 'Loading...'}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-content-secondary">
+            {leads ? `${leads.length} leads` : 'Loading…'}
           </span>
           <Button
             size="sm"
             variant="ghost"
-            className="h-8 w-8 p-0 text-muted-foreground"
-            onClick={() => refetch()}
-            title="Refresh Leads"
+            className="h-8 w-8 p-0 text-content-secondary hover:text-content-primary"
+            onClick={() => { void refetch(); }}
+            title="Refresh leads"
+            aria-label="Refresh leads"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
           </Button>
         </div>
       </div>
 
-      {/* Leads Table */}
-      <Card className="overflow-hidden shadow-xl border-border/80">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-secondary/40 border-b border-border text-muted-foreground uppercase text-[10px] tracking-wider">
+      {/* Leads Table Container */}
+      <div className="flex-1 min-h-0 overflow-auto rounded-lg border border-border bg-surface-panel">
+        <table className="w-full text-left text-xs border-collapse">
+          <thead className="sticky top-0 z-10 bg-surface-base border-b border-border text-content-secondary text-[11px] uppercase tracking-wider font-medium">
+            <tr>
+              <th className="px-4 py-2.5">Customer</th>
+              <th className="px-4 py-2.5">Vertical & intent</th>
+              <th className="px-4 py-2.5">Activity & location</th>
+              <th className="px-4 py-2.5">Status</th>
+              <th className="px-4 py-2.5">Missing details</th>
+              <th className="px-4 py-2.5">Last active</th>
+              <th className="px-4 py-2.5 text-right"><span className="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {isLoading ? (
+              [1, 2, 3, 4, 5].map((i) => (
+                <tr key={i}>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                  <td className="px-4 py-3 text-right"><Skeleton className="h-4 w-8 ml-auto" /></td>
+                </tr>
+              ))
+            ) : isError ? (
               <tr>
-                <th className="px-6 py-3 font-semibold">Customer</th>
-                <th className="px-6 py-3 font-semibold">Vertical & Intent</th>
-                <th className="px-6 py-3 font-semibold">Activity & Location</th>
-                <th className="px-6 py-3 font-semibold">Resider Status</th>
-                <th className="px-6 py-3 font-semibold">Missing Details</th>
-                <th className="px-6 py-3 font-semibold">Last Active</th>
-                <th className="px-6 py-3 font-semibold text-right">Action</th>
+                <td colSpan={7} className="p-8 text-center text-danger">
+                  Could not load leads. Please check your connection and retry.
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {isLoading ? (
-                [1, 2, 3, 4, 5].map((i) => (
-                  <tr key={i}>
-                    <td className="px-6 py-4">
-                      <Skeleton className="h-4 w-32" />
-                    </td>
-                    <td className="px-6 py-4">
-                      <Skeleton className="h-4 w-28" />
-                    </td>
-                    <td className="px-6 py-4">
-                      <Skeleton className="h-4 w-24" />
-                    </td>
-                    <td className="px-6 py-4">
-                      <Skeleton className="h-4 w-24" />
-                    </td>
-                    <td className="px-6 py-4">
-                      <Skeleton className="h-4 w-20" />
-                    </td>
-                    <td className="px-6 py-4">
-                      <Skeleton className="h-4 w-16" />
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <Skeleton className="h-4 w-8 ml-auto" />
-                    </td>
-                  </tr>
-                ))
-              ) : leads && leads.length > 0 ? (
-                leads.map((lead) => (
+            ) : leads && leads.length > 0 ? (
+              leads.map((lead) => {
+                const missingCount = lead.missingDetails?.filter(Boolean).length || 0;
+                return (
                   <tr
                     key={lead.id}
-                    onClick={() => setSelectedLeadId(lead.id)}
-                    className="hover:bg-secondary/20 transition-colors cursor-pointer group"
+                    className="hover:bg-surface-hover/70 transition-colors group cursor-pointer"
+                    onClick={() => handleSelectLead(lead.id)}
                   >
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                        {lead.fullName || 'Anonymous Customer'}
-                      </div>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectLead(lead.id);
+                        }}
+                        className="font-medium text-content-primary hover:text-accent hover:underline text-left block focus:outline-none focus:ring-1 focus:ring-accent rounded"
+                      >
+                        {lead.fullName || 'Anonymous customer'}
+                      </button>
                       {(lead.phoneOrEmail || lead.phoneNumber) && (
-                        <div className="text-[10px] text-muted-foreground font-mono">
+                        <div className="text-[11px] text-content-secondary font-mono mt-0.5">
                           {lead.phoneOrEmail || lead.phoneNumber}
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-foreground flex items-center gap-1.5 capitalize">
-                        <Briefcase className="w-3.5 h-3.5 text-primary/80" />
-                        <span>{lead.serviceVertical.replace(/_/g, ' ')}</span>
+                    <td className="px-4 py-3">
+                      <div className="text-content-primary">
+                        {humanize(lead.serviceVertical)}
                       </div>
-                      <div className="text-[10px] text-muted-foreground capitalize">
-                        {lead.residencyIntent ? lead.residencyIntent.replace(/_/g, ' ') : '—'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-foreground flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{lead.workBusinessActivity || 'Pending'}</span>
-                      </div>
-                      <div className="text-[10px] text-muted-foreground capitalize">
-                        {lead.targetEmirate || lead.uaeLocationContext.replace(/_/g, ' ')}
+                      <div className="text-[11px] text-content-secondary">
+                        {lead.residencyIntent ? humanize(lead.residencyIntent) : '—'}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium border capitalize ${getResiderStatusBadgeClass(
-                          lead.leadStatus
-                        )}`}
-                      >
-                        {lead.leadStatus.replace(/_/g, ' ')}
+                    <td className="px-4 py-3">
+                      <div className="text-content-primary">
+                        {lead.workBusinessActivity || 'Pending'}
+                      </div>
+                      <div className="text-[11px] text-content-secondary">
+                        {lead.targetEmirate || humanize(lead.uaeLocationContext)}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center text-xs font-medium text-content-primary">
+                        {leadLabels[lead.leadStatus]}
                       </span>
                       {lead.statusReason && (
-                        <div className="text-[10px] text-muted-foreground truncate max-w-[160px] mt-0.5" title={lead.statusReason}>
+                        <div className="text-[11px] text-content-secondary truncate max-w-[160px] mt-0.5" title={lead.statusReason}>
                           {lead.statusReason}
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4">
-                      {lead.missingDetails && lead.missingDetails.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 max-w-[150px]">
-                          {lead.missingDetails.slice(0, 2).map((item) => (
-                            <span
-                              key={item}
-                              className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 capitalize"
-                            >
-                              {item.replace(/_/g, ' ')}
-                            </span>
-                          ))}
-                          {lead.missingDetails.length > 2 && (
-                            <span className="text-[9px] text-muted-foreground">
-                              +{lead.missingDetails.length - 2} more
-                            </span>
-                          )}
-                        </div>
+                    <td className="px-4 py-3">
+                      {missingCount > 0 ? (
+                        <span className="text-[11px] text-warning font-medium">
+                          {missingCount} detail{missingCount > 1 ? 's' : ''} missing
+                        </span>
                       ) : (
-                        <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" /> Complete
+                        <span className="text-[11px] text-success">
+                          Complete
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">
-                      {formatRelativeTime(lead.updatedAt)}
+                    <td className="px-4 py-3 text-content-secondary text-[11px]">
+                      <time dateTime={new Date(lead.updatedAt).toISOString()}>
+                        {absoluteTime(lead.updatedAt)}
+                      </time>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
+                    <td className="px-4 py-3 text-right">
+                      <ChevronRight className="w-4 h-4 text-content-secondary group-hover:text-content-primary ml-auto" aria-hidden="true" />
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                    <p className="font-medium text-xs">No leads found matching your criteria</p>
-                    <p className="text-[11px] opacity-70 mt-1">
-                      As inbound customer conversations occur, Resider AI automatically qualifies and lists profiles here.
-                    </p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-content-secondary">
+                  <p className="font-medium text-sm text-content-primary">No leads found matching your criteria</p>
+                  <p className="text-xs mt-1">
+                    As inbound customer conversations occur, Resider automatically qualifies and lists profiles here.
+                  </p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* Slide-out Lead Drawer */}
       <LeadDrawer
         leadId={selectedLeadId}
-        onClose={() => setSelectedLeadId(null)}
+        onClose={() => handleSelectLead(null)}
         onNavigateToInbox={onNavigateToInbox}
       />
     </div>

@@ -3,50 +3,45 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: 220 20% 98%;
-    --foreground: 224 71.4% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --primary: 246 80% 60%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220.9 39.3% 11%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 8.9% 46.1%;
-    --accent: 220 14% 96%;
-    --accent-foreground: 220.9 39.3% 11%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 246 80% 60%;
-    --radius: 0.75rem;
-  }
-
+  :root,
   .dark {
-    --background: 224 25% 7%;
-    --foreground: 210 20% 98%;
-    --card: 224 25% 10%;
-    --card-foreground: 210 20% 98%;
-    --popover: 224 25% 10%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 246 80% 65%;
-    --primary-foreground: 224 25% 7%;
-    --secondary: 224 20% 15%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 224 20% 14%;
-    --muted-foreground: 217.9 10.6% 64.9%;
-    --accent: 224 20% 15%;
-    --accent-foreground: 210 20% 98%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 224 20% 16%;
-    --input: 224 20% 16%;
-    --ring: 246 80% 65%;
-    --radius: 0.75rem;
+    color-scheme: dark;
+    --surface-base: 180 11.11% 3.53%;
+    --surface-sidebar: 200 10.34% 5.69%;
+    --surface-panel: 204 12.82% 7.65%;
+    --surface-raised: 205.71 12.28% 11.18%;
+    --surface-hover: 206.67 12.33% 14.31%;
+    --surface-selected: 210 13.33% 17.65%;
+    --text-primary: 210 11.76% 93.33%;
+    --text-secondary: 212 10.34% 71.57%;
+    --text-muted: 208.42 9% 58.63%;
+    --border-subtle: 207.27 11.58% 18.63%;
+    --border-control: 208.57 9.17% 44.90%;
+    --success: 149.25 42.55% 63.14%;
+    --warning: 38.38 68.10% 68.04%;
+    --danger: 354.55 76.74% 74.71%;
+
+    /* Compatibility aliases keep existing screens usable during migration. */
+    --background: var(--surface-base);
+    --foreground: var(--text-primary);
+    --card: var(--surface-panel);
+    --card-foreground: var(--text-primary);
+    --popover: var(--surface-raised);
+    --popover-foreground: var(--text-primary);
+    --primary: 234.19 89.86% 72.94%;
+    --primary-foreground: var(--surface-base);
+    --secondary: var(--surface-raised);
+    --secondary-foreground: var(--text-secondary);
+    --muted: var(--surface-hover);
+    --muted-foreground: var(--text-muted);
+    --accent: var(--surface-hover);
+    --accent-foreground: var(--text-primary);
+    --destructive: var(--danger);
+    --destructive-foreground: var(--surface-base);
+    --border: var(--border-subtle);
+    --input: var(--border-control);
+    --ring: var(--primary);
+    --radius: 0.5rem;
   }
 }
 
@@ -56,7 +51,39 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  :where(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  :where(h1, h2, h3, h4) {
+    text-wrap: balance;
+  }
+  :where(p) {
+    text-wrap: pretty;
+  }
+  :where(button, input, textarea, select):disabled {
+    cursor: not-allowed;
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.25);
+    color: hsl(var(--foreground));
+  }
+}
+
+/* Keep controls reachable on compact/touch layouts without changing desktop density. */
+@media (max-width: 767px) {
+  :where(button, select, input:not([type='checkbox']):not([type='radio'])) {
+    min-height: 44px;
+  }
+  button:has(> svg:only-child) {
+    min-width: 44px;
+  }
+  nav[aria-label='Workspace navigation'] a {
+    min-height: 44px;
   }
 }
 

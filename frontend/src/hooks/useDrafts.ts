@@ -15,8 +15,11 @@ export function usePendingDrafts() {
 export function useConversationDraft(conversationId: string | null) {
   return useQuery({
     queryKey: queryKeys.drafts.conversation(conversationId || ''),
-    queryFn: () =>
-      apiFetch<MessageDraft | null>(`/api/drafts/conversation/${conversationId}`),
+    queryFn: ({ signal }) =>
+      apiFetch<MessageDraft | null>(
+        `/api/drafts/conversation/${encodeURIComponent(conversationId || '')}`,
+        { signal },
+      ),
     enabled: Boolean(conversationId),
     refetchInterval: 8 * 1000,
     staleTime: 4 * 1000,
@@ -32,11 +35,19 @@ export function useApproveDraft() {
         method: 'POST',
       }),
     onSuccess: (draft) => {
+      queryClient.setQueryData<MessageDraft | null>(
+        queryKeys.drafts.conversation(draft.conversationId),
+        (old) => (old?.id === draft.id ? null : old),
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.drafts.all });
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.messages(draft.conversationId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.drafts.all });
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.conversations.all, 'messages'] });
     },
   });
 }
@@ -51,11 +62,22 @@ export function useModifyDraft() {
         body: JSON.stringify({ modifiedText }),
       }),
     onSuccess: (draft) => {
+      queryClient.setQueryData<MessageDraft | null>(
+        queryKeys.drafts.conversation(draft.conversationId),
+        (old) => (old?.id === draft.id ? null : old),
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.drafts.all });
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.messages(draft.conversationId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.drafts.all });
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === 'conversations' && query.queryKey[1] === 'messages',
+      });
     },
   });
 }
@@ -68,7 +90,11 @@ export function useRejectDraft() {
       apiFetch<MessageDraft>(`/api/drafts/${draftId}/reject`, {
         method: 'POST',
       }),
-    onSuccess: () => {
+    onSuccess: (draft) => {
+      queryClient.setQueryData<MessageDraft | null>(
+        queryKeys.drafts.conversation(draft.conversationId),
+        (old) => (old?.id === draft.id ? null : old),
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.drafts.all });
     },
   });

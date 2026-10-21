@@ -3,32 +3,37 @@ import {
   Users,
   Search,
   Plus,
-  Building2,
+  Trash2,
+  RefreshCw,
   Phone,
   Mail,
   ShieldCheck,
-  CheckCircle2,
-  Trash2,
-  RefreshCw,
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog } from '@/components/ui/Dialog';
+import { ConfirmAction } from '@/components/ui/ConfirmAction';
+import { Field } from '@/components/ui/Field';
 import {
   useExperts,
   useCreateExpert,
   useDeleteExpert,
 } from '@/hooks/useExperts';
+import { partnersHref, navigate, type WorkspaceRoute } from '@/lib/navigation';
 import type { VerifiedExpert } from '@shared/types/expert.types';
 
-export function ExpertsView() {
-  const [sectorFilter, setSectorFilter] = React.useState<string>('all');
+interface ExpertsViewProps {
+  route?: WorkspaceRoute;
+}
+
+export function ExpertsView({ route }: ExpertsViewProps = {}) {
+  const [sectorFilter, setSectorFilter] = React.useState<string>(route?.partnerSector || 'all');
   const [languageFilter, setLanguageFilter] = React.useState<string>('all');
   const [emirateFilter, setEmirateFilter] = React.useState<string>('all');
-  const [searchQuery, setSearchQuery] = React.useState<string>('');
+  const [searchQuery, setSearchQuery] = React.useState<string>(route?.search || '');
   const [showAddModal, setShowAddModal] = React.useState<boolean>(false);
+  const [deletingPartner, setDeletingPartner] = React.useState<{ id: string; name: string } | null>(null);
 
   // Form state
   const [formName, setFormName] = React.useState('');
@@ -42,6 +47,7 @@ export function ExpertsView() {
   const {
     data: experts,
     isLoading,
+    isError,
     refetch,
   } = useExperts({
     sector: sectorFilter === 'all' ? undefined : sectorFilter,
@@ -51,6 +57,11 @@ export function ExpertsView() {
 
   const createExpertMutation = useCreateExpert();
   const deleteExpertMutation = useDeleteExpert();
+
+  const handleSectorChange = (sector: string) => {
+    setSectorFilter(sector);
+    navigate(partnersHref({ sector, search: searchQuery }));
+  };
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,12 +105,6 @@ export function ExpertsView() {
     );
   };
 
-  const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to remove ${name} from verified partners?`)) {
-      deleteExpertMutation.mutate(id);
-    }
-  };
-
   const filteredExperts = (experts || []).filter((exp) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -111,16 +116,16 @@ export function ExpertsView() {
   });
 
   return (
-    <div className="space-y-6">
-      {/* Top Header Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="flex flex-col h-full min-h-0 space-y-4">
+      {/* Header Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div>
-          <h2 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Users className="w-5 h-5 text-primary" />
-            Verified Consulting Experts
+          <h2 className="text-lg font-semibold tracking-tight text-content-primary flex items-center gap-2">
+            <Users className="w-5 h-5 text-accent" aria-hidden="true" />
+            Verified consulting partners
           </h2>
-          <p className="text-xs text-muted-foreground">
-            Approved business setup consulting partners for UAE licensing, mainland, and sector handovers
+          <p className="text-xs text-content-secondary mt-0.5">
+            Approved business setup consulting partners for UAE licensing, mainland, and sector handovers.
           </p>
         </div>
 
@@ -128,55 +133,59 @@ export function ExpertsView() {
           <Button
             size="sm"
             variant="outline"
-            className="text-xs h-8 gap-1.5"
-            onClick={() => refetch()}
+            className="text-xs h-8 gap-1.5 bg-surface-panel border-border"
+            onClick={() => { void refetch(); }}
+            title="Refresh partners list"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Refresh</span>
           </Button>
 
           <Button
             size="sm"
-            className="text-xs h-8 gap-1.5 bg-primary text-primary-foreground shadow-sm"
+            className="text-xs h-8 gap-1.5"
             onClick={() => setShowAddModal(true)}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Verified Partner</span>
+            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Add verified partner</span>
           </Button>
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
         <div className="relative w-64">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" aria-hidden="true" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search partners, sectors..."
-            className="pl-8 h-8 text-xs bg-card"
+            placeholder="Search partners, sectors…"
+            className="pl-8 h-8 text-xs bg-surface-panel border-border"
+            aria-label="Search partners"
           />
         </div>
 
         <select
           value={sectorFilter}
-          onChange={(e) => setSectorFilter(e.target.value)}
-          className="h-8 rounded-md border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          onChange={(e) => handleSectorChange(e.target.value)}
+          className="h-8 rounded-md border border-border bg-surface-panel px-2.5 text-xs text-content-primary focus:outline-none focus:ring-1 focus:ring-accent"
+          aria-label="Filter by sector"
         >
-          <option value="all">All Sectors</option>
-          <option value="tech">Tech & Software</option>
-          <option value="e-commerce">E-Commerce & Retail</option>
-          <option value="f&b">Food & Beverage</option>
-          <option value="trading">General Trading</option>
-          <option value="consulting">Professional Consulting</option>
+          <option value="all">All sectors</option>
+          <option value="tech">Tech & software</option>
+          <option value="e-commerce">E-Commerce & retail</option>
+          <option value="f&b">Food & beverage</option>
+          <option value="trading">General trading</option>
+          <option value="consulting">Professional consulting</option>
         </select>
 
         <select
           value={languageFilter}
           onChange={(e) => setLanguageFilter(e.target.value)}
-          className="h-8 rounded-md border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          className="h-8 rounded-md border border-border bg-surface-panel px-2.5 text-xs text-content-primary focus:outline-none focus:ring-1 focus:ring-accent"
+          aria-label="Filter by language"
         >
-          <option value="all">All Languages</option>
+          <option value="all">All languages</option>
           <option value="en">English (en)</option>
           <option value="ml">Malayalam (ml)</option>
           <option value="ar">Arabic (ar)</option>
@@ -186,261 +195,248 @@ export function ExpertsView() {
         <select
           value={emirateFilter}
           onChange={(e) => setEmirateFilter(e.target.value)}
-          className="h-8 rounded-md border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          className="h-8 rounded-md border border-border bg-surface-panel px-2.5 text-xs text-content-primary focus:outline-none focus:ring-1 focus:ring-accent"
+          aria-label="Filter by emirate"
         >
-          <option value="all">All Emirates</option>
+          <option value="all">All emirates</option>
           <option value="dubai">Dubai</option>
           <option value="abu_dhabi">Abu Dhabi</option>
           <option value="sharjah">Sharjah</option>
         </select>
       </div>
 
-      {/* Experts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {isLoading ? (
-          [1, 2, 3].map((i) => (
-            <Card key={i} className="p-4 space-y-3">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-3 w-48" />
-              <Skeleton className="h-6 w-full" />
-            </Card>
-          ))
-        ) : filteredExperts && filteredExperts.length > 0 ? (
-          filteredExperts.map((exp: VerifiedExpert) => (
-            <Card
-              key={exp.id}
-              className="p-4 shadow-sm border-border/80 hover:border-primary/40 transition-colors space-y-3 flex flex-col justify-between"
-            >
-              <div className="space-y-2.5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-bold text-sm text-foreground flex items-center gap-1.5">
+      {/* Directory Table */}
+      <div className="flex-1 min-h-0 overflow-auto rounded-lg border border-border bg-surface-panel">
+        <table className="w-full text-left text-xs border-collapse">
+          <thead className="sticky top-0 z-10 bg-surface-base border-b border-border text-content-secondary text-[11px] uppercase tracking-wider font-medium">
+            <tr>
+              <th className="px-4 py-2.5">Partner</th>
+              <th className="px-4 py-2.5">Sectors</th>
+              <th className="px-4 py-2.5">Languages</th>
+              <th className="px-4 py-2.5">Emirates</th>
+              <th className="px-4 py-2.5">Status</th>
+              <th className="px-4 py-2.5">Contact</th>
+              <th className="px-4 py-2.5 text-right"><span className="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {isLoading ? (
+              [1, 2, 3, 4, 5].map((i) => (
+                <tr key={i}>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="px-4 py-3 text-right"><Skeleton className="h-4 w-8 ml-auto" /></td>
+                </tr>
+              ))
+            ) : isError ? (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-danger">
+                  Could not load partners. Please check your connection and retry.
+                </td>
+              </tr>
+            ) : filteredExperts && filteredExperts.length > 0 ? (
+              filteredExperts.map((exp: VerifiedExpert) => (
+                <tr
+                  key={exp.id}
+                  className="hover:bg-surface-hover/70 transition-colors group"
+                >
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-content-primary flex items-center gap-1.5">
                       {exp.fullName}
                       {exp.isVerified && (
-                        <span title="Verified Resider Partner">
-                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span title="Verified Resider partner" aria-label="Verified">
+                          <ShieldCheck className="w-3.5 h-3.5 text-success" aria-hidden="true" />
                         </span>
                       )}
-                    </h3>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <Building2 className="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <div className="text-[11px] text-content-secondary mt-0.5">
                       {exp.organizationName}
-                    </p>
-                  </div>
-
-                  <Badge
-                    variant="outline"
-                    className={`text-[9px] ${
-                      exp.isAvailable
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                        : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {exp.isAvailable ? 'Available' : 'Busy'}
-                  </Badge>
-                </div>
-
-                {/* Sectors */}
-                <div className="space-y-1">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                    Sectors:
-                  </span>
-                  <div className="flex flex-wrap gap-1">
-                    {exp.sectors.map((s) => (
-                      <span
-                        key={s}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 capitalize font-medium"
-                      >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Languages & Emirates */}
-                <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                  <div>
-                    <span className="text-[10px] text-muted-foreground block">Languages:</span>
-                    <span className="font-medium text-foreground uppercase text-[11px]">
-                      {exp.languages.join(', ')}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1 max-w-[200px]">
+                      {exp.sectors.map((s) => (
+                        <span
+                          key={s}
+                          className="text-[10px] px-1.5 py-0.5 rounded border border-border bg-surface-base text-content-secondary capitalize"
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-content-primary uppercase text-[11px] font-mono">
+                    {exp.languages.join(', ')}
+                  </td>
+                  <td className="px-4 py-3 text-content-primary capitalize text-[11px]">
+                    {exp.emirates.join(', ')}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center text-[11px] font-medium ${
+                        exp.isAvailable ? 'text-success' : 'text-content-secondary'
+                      }`}
+                    >
+                      {exp.isAvailable ? 'Available' : 'Unavailable'}
                     </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-muted-foreground block">Emirates:</span>
-                    <span className="font-medium text-foreground capitalize text-[11px]">
-                      {exp.emirates.join(', ')}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Contact info */}
-                {(exp.contactPhone || exp.contactEmail) && (
-                  <div className="space-y-1 pt-1 border-t border-border/50 text-[11px] text-muted-foreground font-mono">
+                  </td>
+                  <td className="px-4 py-3 text-content-secondary text-[11px] font-mono space-y-0.5">
                     {exp.contactPhone && (
                       <div className="flex items-center gap-1.5">
-                        <Phone className="w-3 h-3 text-emerald-400" />
+                        <Phone className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
                         <span>{exp.contactPhone}</span>
                       </div>
                     )}
                     {exp.contactEmail && (
                       <div className="flex items-center gap-1.5">
-                        <Mail className="w-3 h-3 text-primary" />
+                        <Mail className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
                         <span>{exp.contactEmail}</span>
                       </div>
                     )}
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-3 border-t border-border/60 flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground">
-                  Partner ID: {exp.id.slice(0, 8)}...
-                </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/20 px-2"
-                  onClick={() => handleDelete(exp.id, exp.fullName)}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </Card>
-          ))
-        ) : (
-          <div className="col-span-full p-8 text-center text-muted-foreground border border-dashed border-border rounded-xl space-y-2">
-            <Users className="w-8 h-8 mx-auto opacity-30" />
-            <p className="text-xs font-medium">No verified experts registered</p>
-            <p className="text-[11px] opacity-70">
-              Add consulting partners who handle UAE business setup, mainland licensing, or tax advisory.
-            </p>
-          </div>
-        )}
+                    {!exp.contactPhone && !exp.contactEmail && <span>—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs text-danger hover:text-danger hover:bg-danger/10 px-2"
+                      onClick={() => setDeletingPartner({ id: exp.id, name: exp.fullName })}
+                      title={`Remove ${exp.fullName}`}
+                      aria-label={`Remove partner ${exp.fullName}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-content-secondary">
+                  <p className="font-medium text-sm text-content-primary">No partners found</p>
+                  <p className="text-xs mt-1">
+                    Add consulting partners who handle UAE business setup, mainland licensing, or tax advisory.
+                  </p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
-      {/* Add Partner Modal */}
+      {/* Add Partner Dialog */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg shadow-2xl border-border animate-in fade-in duration-200">
-            <CardHeader className="pb-3 border-b border-border">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Plus className="w-4 h-4 text-primary" />
-                Add Verified Consulting Partner
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Register an expert who can receive qualified business setup referrals
-              </CardDescription>
-            </CardHeader>
+        <Dialog
+          title="Add verified consulting partner"
+          onClose={() => setShowAddModal(false)}
+          isBusy={createExpertMutation.isPending}
+        >
+          <form onSubmit={handleCreateSubmit} className="space-y-4 p-5">
+            <p className="text-xs text-content-secondary">
+              Register an accredited partner who can receive qualified business setup referrals and customer handovers.
+            </p>
 
-            <CardContent className="pt-4">
-              <form onSubmit={handleCreateSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-foreground">Expert Full Name *</label>
-                    <Input
-                      required
-                      placeholder="e.g. Shaji Rahman"
-                      value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
-                      className="text-xs"
-                    />
-                  </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                required
+                label="Partner full name *"
+                placeholder="e.g. Shaji Rahman"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+              />
+              <Field
+                required
+                label="Organization / firm *"
+                placeholder="e.g. Apex Corporate Services"
+                value={formOrg}
+                onChange={(e) => setFormOrg(e.target.value)}
+              />
+            </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-foreground">Organization / Firm *</label>
-                    <Input
-                      required
-                      placeholder="e.g. Apex Corporate Services"
-                      value={formOrg}
-                      onChange={(e) => setFormOrg(e.target.value)}
-                      className="text-xs"
-                    />
-                  </div>
-                </div>
+            <Field
+              required
+              label="Sectors covered (comma-separated) *"
+              placeholder="tech, e-commerce, consulting, trading"
+              value={formSectors}
+              onChange={(e) => setFormSectors(e.target.value)}
+            />
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-foreground">
-                    Sectors Covered (comma-separated) *
-                  </label>
-                  <Input
-                    required
-                    placeholder="tech, e-commerce, consulting, trading"
-                    value={formSectors}
-                    onChange={(e) => setFormSectors(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                required
+                label="Languages (e.g. en, ml, ar)"
+                placeholder="en, ml"
+                value={formLanguages}
+                onChange={(e) => setFormLanguages(e.target.value)}
+              />
+              <Field
+                required
+                label="Emirates (e.g. dubai, all)"
+                placeholder="dubai, all"
+                value={formEmirates}
+                onChange={(e) => setFormEmirates(e.target.value)}
+              />
+            </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-foreground">Languages (e.g. en, ml, ar)</label>
-                    <Input
-                      required
-                      placeholder="en, ml"
-                      value={formLanguages}
-                      onChange={(e) => setFormLanguages(e.target.value)}
-                      className="text-xs font-mono"
-                    />
-                  </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                label="Direct phone / WhatsApp"
+                placeholder="+971 50 999 8888"
+                value={formPhone}
+                onChange={(e) => setFormPhone(e.target.value)}
+              />
+              <Field
+                label="Email address"
+                type="email"
+                placeholder="partner@apexcorp.ae"
+                value={formEmail}
+                onChange={(e) => setFormEmail(e.target.value)}
+              />
+            </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-foreground">Emirates (e.g. dubai, all)</label>
-                    <Input
-                      required
-                      placeholder="dubai, all"
-                      value={formEmirates}
-                      onChange={(e) => setFormEmirates(e.target.value)}
-                      className="text-xs"
-                    />
-                  </div>
-                </div>
+            {createExpertMutation.isError && (
+              <p role="alert" className="text-xs text-danger">
+                {createExpertMutation.error.message || 'Could not register partner.'}
+              </p>
+            )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-foreground">Direct WhatsApp / Phone</label>
-                    <Input
-                      placeholder="+971 50 999 8888"
-                      value={formPhone}
-                      onChange={(e) => setFormPhone(e.target.value)}
-                      className="text-xs font-mono"
-                    />
-                  </div>
+            <div className="pt-3 border-t border-border flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={createExpertMutation.isPending}
+                onClick={() => setShowAddModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={createExpertMutation.isPending || !formName.trim() || !formOrg.trim()}
+              >
+                {createExpertMutation.isPending ? 'Saving…' : 'Register partner'}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-foreground">Email</label>
-                    <Input
-                      type="email"
-                      placeholder="partner@apexcorp.ae"
-                      value={formEmail}
-                      onChange={(e) => setFormEmail(e.target.value)}
-                      className="text-xs font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-border flex items-center justify-end gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowAddModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={createExpertMutation.isPending}
-                    className="gap-1.5"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>{createExpertMutation.isPending ? 'Saving...' : 'Register Partner'}</span>
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+      {/* Remove Confirmation Dialog */}
+      {deletingPartner && (
+        <ConfirmAction
+          title={`Remove ${deletingPartner.name}?`}
+          actionLabel="Remove partner"
+          onConfirm={async () => {
+            await deleteExpertMutation.mutateAsync(deletingPartner.id);
+          }}
+          onClose={() => setDeletingPartner(null)}
+        >
+          Are you sure you want to remove this partner? Existing handover records will be preserved.
+        </ConfirmAction>
       )}
     </div>
   );

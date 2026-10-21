@@ -148,6 +148,10 @@ draftRoutes.post('/:id/modify', async (c) => {
     return jsonError(c, 'NOT_FOUND', 'Draft not found', 404);
   }
 
+  if (draft.status !== 'pending_review') {
+    return jsonError(c, 'CONFLICT', `Draft is already in status '${draft.status}'`, 409);
+  }
+
   const convo = await c.env.DB
     .prepare('SELECT id, connection_id, channel, customer_id FROM conversations WHERE id = ? AND tenant_id = ?')
     .bind(draft.conversationId, tenantId)
@@ -230,6 +234,10 @@ draftRoutes.post('/:id/reject', async (c) => {
   const draft = await draftRepository.getDraftById(c.env.DB, tenantId, draftId);
   if (!draft) {
     return jsonError(c, 'NOT_FOUND', 'Draft not found', 404);
+  }
+
+  if (draft.status !== 'pending_review') {
+    return jsonError(c, 'CONFLICT', `Draft is already in status '${draft.status}'`, 409);
   }
 
   const updatedDraft = await draftRepository.resolveDraft(

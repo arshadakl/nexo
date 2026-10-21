@@ -220,13 +220,13 @@ export class ConversationRepository {
                 error_message, created_at
          FROM messages
          WHERE tenant_id = ? AND conversation_id = ?
-         ORDER BY created_at ASC
+         ORDER BY created_at DESC, id DESC
          LIMIT ?`
       )
       .bind(tenantId, conversationId, cappedLimit)
       .all<any>();
 
-    return (rows.results || []).map((row) => ({
+    return (rows.results || []).reverse().map((row) => ({
       id: row.id,
       tenantId: row.tenant_id,
       conversationId: row.conversation_id,
@@ -383,6 +383,12 @@ export class ConversationRepository {
     // 2. Delete messages belonging to this conversation
     await db
       .prepare('DELETE FROM messages WHERE tenant_id = ? AND conversation_id = ?')
+      .bind(tenantId, conversationId)
+      .run();
+
+    // A reset must not leave an AI reply generated from the deleted history available to send.
+    await db
+      .prepare('DELETE FROM message_drafts WHERE tenant_id = ? AND conversation_id = ?')
       .bind(tenantId, conversationId)
       .run();
 

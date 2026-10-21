@@ -7,6 +7,31 @@ import {
 } from '../shared/schemas/conversation.schema';
 
 describe('Conversation Repository & Schemas', () => {
+  it('removes pending AI drafts as well as messages when a conversation is reset', async () => {
+    const calls: { sql: string; params: unknown[] }[] = [];
+    const prepare = vi.fn((sql: string) => ({ bind: (...params: unknown[]) => {
+      calls.push({ sql, params });
+      return { all: async () => ({ results: [] }), run: async () => ({ success: true }) };
+    } }));
+    await conversationRepository.clearConversationHistory({ prepare } as any, 'tenant_1', 'convo_1');
+    expect(calls.find((call) => call.sql.includes('DELETE FROM message_drafts'))?.params).toEqual(['tenant_1', 'convo_1']);
+    expect(calls.find((call) => call.sql.includes('DELETE FROM messages'))?.params).toEqual(['tenant_1', 'convo_1']);
+  });
+  it('returns the newest bounded message window in chronological order', async () => {
+    const rows = Array.from({ length: 50 }, (_, index) => ({
+      id: `message-${51 - index}`, tenant_id: 'tenant_1', conversation_id: 'convo_1',
+      direction: 'inbound', sender_type: 'applicant', message_text: `Message ${51 - index}`,
+      message_type: 'text', delivery_status: 'delivered', created_at: 51 - index,
+    }));
+    const bind = vi.fn().mockReturnValue({ all: vi.fn().mockResolvedValue({ results: rows }) });
+    const prepare = vi.fn().mockReturnValue({ bind });
+    const messages = await conversationRepository.listMessages({ prepare } as any, 'tenant_1', 'convo_1', 50);
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining('ORDER BY created_at DESC, id DESC'));
+    expect(bind).toHaveBeenCalledWith('tenant_1', 'convo_1', 50);
+    expect(messages).toHaveLength(50);
+    expect(messages[0]?.messageText).toBe('Message 2');
+    expect(messages.at(-1)?.messageText).toBe('Message 51');
+  });
   it('validates SendMessageSchema correctly', () => {
     expect(SendMessageSchema.safeParse({ messageText: 'Hello applicant' }).success).toBe(true);
     expect(SendMessageSchema.safeParse({ messageText: '' }).success).toBe(false);

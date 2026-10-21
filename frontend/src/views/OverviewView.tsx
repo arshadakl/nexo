@@ -4,99 +4,113 @@ import {
   AlertTriangle,
   ArrowUpRight,
   Sparkles,
-  Globe,
   RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalyticsOverview } from '@/hooks/useAnalytics';
-import type { NavItemKey } from '@/components/layout/Sidebar';
+import { navigate, screenPaths, type NavItemKey } from '@/lib/navigation';
 
 interface OverviewViewProps {
   onNavigateTab?: (tab: NavItemKey) => void;
 }
 
 export function OverviewView({ onNavigateTab }: OverviewViewProps = {}) {
-  const { data: analytics, isLoading, refetch } = useAnalyticsOverview();
+  const { data: analytics, isLoading, isError, refetch } = useAnalyticsOverview();
 
   const kpis = analytics?.kpis;
 
   const metricCards = [
     {
-      title: 'Active Inbound Inquiries',
+      title: 'Active conversations',
       value: kpis?.activeConversations.value !== undefined ? String(kpis.activeConversations.value) : '0',
-      change: kpis?.activeConversations.changeText || 'Live D1 sync',
+      description: 'Loaded workspace inquiries',
       icon: MessageSquare,
-      color: 'text-primary',
+      color: 'text-accent',
     },
     {
-      title: 'Qualified Hot Leads',
+      title: 'Qualified leads',
       value: kpis?.qualifiedLeads.value !== undefined ? String(kpis.qualifiedLeads.value) : '0',
-      change: kpis?.qualifiedLeads.changeText || 'Awaiting consultation',
+      description: 'Ready for team consultation',
       icon: Users,
-      color: 'text-emerald-400',
+      color: 'text-success',
     },
     {
-      title: 'AI Auto-Replies Sent',
+      title: 'AI auto-replies dispatched',
       value: kpis?.aiAutoReplies.value !== undefined ? String(kpis.aiAutoReplies.value) : '0',
-      change: kpis?.aiAutoReplies.changeText || 'Structured output',
+      description: 'Structured automated responses',
       icon: Sparkles,
-      color: 'text-indigo-400',
+      color: 'text-accent',
     },
     {
-      title: 'Staff Review / Takeover',
+      title: 'Review / human takeover',
       value: kpis?.needsHumanReview.value !== undefined ? String(kpis.needsHumanReview.value) : '0',
-      change: kpis?.needsHumanReview.changeText || 'AI paused',
+      description: 'Conversations requiring attention',
       icon: AlertTriangle,
-      color: 'text-amber-400',
+      color: 'text-warning',
     },
   ];
 
+  const handleNavigate = (tab: NavItemKey) => {
+    if (onNavigateTab) {
+      onNavigateTab(tab);
+    } else {
+      navigate(screenPaths[tab]);
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-6xl">
       {/* Top Header Controls */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold tracking-tight text-foreground">Executive Overview</h2>
-          <p className="text-xs text-muted-foreground">
-            Live omnichannel CRM metrics, visa applicant pipeline, and AI inference telemetry
+          <h2 className="text-lg font-semibold tracking-tight text-content-primary">
+            Overview
+          </h2>
+          <p className="text-xs text-content-secondary mt-0.5">
+            Operational summary across conversations, lead pipeline stages, and connected channels.
           </p>
         </div>
         <Button
           size="sm"
           variant="outline"
-          className="text-xs h-8 gap-1.5"
-          onClick={() => refetch()}
+          className="text-xs h-8 gap-1.5 bg-surface-panel border-border"
+          onClick={() => { void refetch(); }}
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
           <span>Refresh</span>
         </Button>
       </div>
 
-      {/* Top metrics row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {isError && (
+        <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-4 text-xs text-danger">
+          Could not load analytics summary. Please check your connection and retry.
+        </div>
+      )}
+
+      {/* Top metrics strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {metricCards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card key={card.title} className="hover:border-primary/40 transition-colors shadow-sm">
+            <Card key={card.title} className="bg-surface-panel border-border">
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle className="text-xs font-medium text-muted-foreground">
+                <CardTitle className="text-xs font-medium text-content-secondary">
                   {card.title}
                 </CardTitle>
-                <Icon className={`w-4 h-4 ${card.color}`} />
+                <Icon className={`w-4 h-4 ${card.color}`} aria-hidden="true" />
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <Skeleton className="h-8 w-16 mb-1" />
+                  <Skeleton className="h-7 w-16 mb-1" />
                 ) : (
-                  <div className="text-2xl font-bold tracking-tight text-foreground font-mono">
+                  <div className="text-2xl font-bold tracking-tight text-content-primary font-mono">
                     {card.value}
                   </div>
                 )}
-                <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
-                  <span>{card.change}</span>
+                <p className="text-[11px] text-content-secondary mt-1">
+                  {card.description}
                 </p>
               </CardContent>
             </Card>
@@ -106,22 +120,18 @@ export function OverviewView({ onNavigateTab }: OverviewViewProps = {}) {
 
       {/* Main operational panels */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Top Destination Countries */}
-        <Card className="lg:col-span-2 shadow-sm">
+        {/* Destination Countries / Service Distribution */}
+        <Card className="lg:col-span-2 bg-surface-panel border-border">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-primary" />
-                  Service Demand & Jurisdictions
+                <CardTitle className="text-sm font-semibold text-content-primary">
+                  Service demand & jurisdictions
                 </CardTitle>
-                <CardDescription className="text-xs">
-                  Residency vs Business Setup demand extracted by Resider AI
+                <CardDescription className="text-xs text-content-secondary mt-0.5">
+                  Residency and business setup demand extracted from inquiries
                 </CardDescription>
               </div>
-              <Badge variant="outline" className="text-[10px]">
-                Live Pipeline
-              </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -138,95 +148,97 @@ export function OverviewView({ onNavigateTab }: OverviewViewProps = {}) {
               analytics.countryDistribution.map((item) => (
                 <div key={item.country} className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-foreground">{item.country}</span>
-                    <span className="text-muted-foreground font-mono">
+                    <span className="font-medium text-content-primary">{item.country}</span>
+                    <span className="text-content-secondary font-mono">
                       {item.leadCount} leads ({item.percentage}%)
                     </span>
                   </div>
-                  <div className="w-full bg-secondary/50 rounded-full h-2 overflow-hidden border border-border/40">
+                  <div className="w-full bg-surface-base rounded-full h-1.5 overflow-hidden border border-border">
                     <div
-                      className="bg-primary h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.max(item.percentage, 6)}%` }}
+                      className="bg-accent h-1.5 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.max(item.percentage, 4)}%` }}
                     />
                   </div>
                 </div>
               ))
             ) : (
-              <div className="p-6 text-center text-muted-foreground text-xs space-y-1">
-                <Globe className="w-6 h-6 mx-auto opacity-30 mb-2" />
-                <p className="font-medium">No destination metrics yet</p>
-                <p className="text-[11px] opacity-70">
-                  As inbound Instagram and WhatsApp applicants mention countries, they appear here.
+              <div className="p-6 text-center text-content-secondary text-xs">
+                <p className="font-medium text-content-primary">No jurisdiction breakdown yet</p>
+                <p className="text-[11px] mt-1">
+                  As inbound applicants mention countries and emirates, distributions appear here.
                 </p>
               </div>
             )}
 
             {/* Omnichannel Distribution row */}
-            <div className="pt-4 border-t border-border/60 grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bg-secondary/30 border border-border flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="instagram">Instagram</Badge>
-                  <span className="text-xs font-semibold text-foreground">
+            <div className="pt-4 border-t border-border grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-md bg-surface-base border border-border flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] text-content-secondary block">Instagram DM</span>
+                  <span className="text-xs font-semibold text-content-primary font-mono">
                     {analytics?.channelBreakdown.find((c) => c.channel === 'instagram')?.conversationCount || 0} chats
                   </span>
                 </div>
-                <span className="text-[10px] text-emerald-400 font-medium">Active</span>
+                <span className="text-[11px] text-success font-medium">Active</span>
               </div>
 
-              <div className="p-3 rounded-lg bg-secondary/30 border border-border flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="whatsapp">WhatsApp</Badge>
-                  <span className="text-xs font-semibold text-foreground">
+              <div className="p-3 rounded-md bg-surface-base border border-border flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] text-content-secondary block">WhatsApp Business</span>
+                  <span className="text-xs font-semibold text-content-primary font-mono">
                     {analytics?.channelBreakdown.find((c) => c.channel === 'whatsapp')?.conversationCount || 0} chats
                   </span>
                 </div>
-                <span className="text-[10px] text-emerald-400 font-medium">Active</span>
+                <span className="text-[11px] text-success font-medium">Active</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Lead Conversion Funnel */}
-        <Card className="shadow-sm">
+        {/* Lead Stages Distribution */}
+        <Card className="bg-surface-panel border-border">
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Resider Lifecycle Funnel</CardTitle>
-            <CardDescription className="text-xs">Customer journey progression from first inquiry to handover</CardDescription>
+            <CardTitle className="text-sm font-semibold text-content-primary">
+              Lead stages distribution
+            </CardTitle>
+            <CardDescription className="text-xs text-content-secondary mt-0.5">
+              Current lead population across canonical qualification stages
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 text-xs">
+          <CardContent className="space-y-2 text-xs">
             {isLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Skeleton key={i} className="h-7 w-full" />
                 ))}
               </div>
             ) : analytics?.conversionFunnel && analytics.conversionFunnel.length > 0 ? (
-              analytics.conversionFunnel.map((step, idx) => (
+              analytics.conversionFunnel.map((step) => (
                 <div
                   key={step.stage}
-                  className="p-2.5 rounded-lg bg-secondary/25 border border-border/60 flex items-center justify-between"
+                  className="p-2.5 rounded-md bg-surface-base border border-border flex items-center justify-between"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center font-mono text-[10px] font-bold shrink-0">
-                      {idx + 1}
-                    </span>
-                    <span className="text-foreground truncate font-medium text-[11px]">{step.stage}</span>
-                  </div>
-                  <span className="font-mono font-semibold text-foreground text-xs shrink-0">
+                  <span className="text-content-primary truncate font-medium text-[11px]">
+                    {step.stage}
+                  </span>
+                  <span className="font-mono font-semibold text-content-primary text-xs shrink-0">
                     {step.count}
                   </span>
                 </div>
               ))
-            ) : null}
+            ) : (
+              <p className="text-content-secondary text-xs p-4 text-center">No stage distribution recorded.</p>
+            )}
 
             <div className="pt-3">
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full text-xs gap-1.5"
-                onClick={() => onNavigateTab ? onNavigateTab('leads') : undefined}
+                className="w-full text-xs gap-1.5 bg-surface-panel border-border"
+                onClick={() => handleNavigate('leads')}
               >
-                <span>View Full Leads Pipeline</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
+                <span>View leads directory</span>
+                <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
               </Button>
             </div>
           </CardContent>

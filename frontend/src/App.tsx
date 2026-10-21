@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './queries/queryClient';
 import { AppShell } from './components/layout/AppShell';
@@ -12,27 +11,27 @@ import { IntegrationsView } from './views/IntegrationsView';
 import { SettingsView } from './views/SettingsView';
 import { LoginView } from './views/LoginView';
 import { AuthProvider, useAuth } from './lib/AuthContext';
-import { useConversations } from './hooks/useConversations';
+import { useNavigation } from './hooks/useNavigation';
+import { inboxHref, navigate, screenPaths } from './lib/navigation';
+import { ComposerProvider } from './lib/ComposerContext';
 
 function Dashboard() {
-  const [currentTab, setCurrentTab] = React.useState<NavItemKey>('overview');
-  const [inboxConversationId, setInboxConversationId] = React.useState<string | null>(null);
-
-  const { data: conversations } = useConversations();
-  const unreadCount = React.useMemo(() => {
-    if (!conversations) return 0;
-    return conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
-  }, [conversations]);
+  const route = useNavigation();
+  const currentTab = route.screen;
 
   const handleNavigateToInbox = (conversationId?: string) => {
-    if (conversationId) {
-      setInboxConversationId(conversationId);
-    }
-    setCurrentTab('inbox');
+    navigate(
+      inboxHref({
+        conversationId: conversationId ?? null,
+        channel: 'all',
+        search: '',
+        humanOnly: false,
+      }),
+    );
   };
 
   const handleNavigateTab = (tab: NavItemKey) => {
-    setCurrentTab(tab);
+    navigate(screenPaths[tab]);
   };
 
   const renderCurrentView = () => {
@@ -40,11 +39,23 @@ function Dashboard() {
       case 'overview':
         return <OverviewView onNavigateTab={handleNavigateTab} />;
       case 'inbox':
-        return <InboxView initialConversationId={inboxConversationId} />;
+        return (
+          <InboxView
+            route={route}
+            onRouteChange={(patch, replace = false) =>
+              navigate(inboxHref({ ...route, ...patch }), replace)
+            }
+          />
+        );
       case 'leads':
-        return <LeadsView onNavigateToInbox={handleNavigateToInbox} />;
+        return (
+          <LeadsView
+            route={route}
+            onNavigateToInbox={handleNavigateToInbox}
+          />
+        );
       case 'experts':
-        return <ExpertsView />;
+        return <ExpertsView route={route} />;
       case 'ai-automation':
         return <AIAutomationView />;
       case 'integrations':
@@ -57,9 +68,11 @@ function Dashboard() {
   };
 
   return (
-    <AppShell currentTab={currentTab} onTabChange={setCurrentTab} unreadCount={unreadCount}>
-      {renderCurrentView()}
-    </AppShell>
+    <ComposerProvider>
+      <AppShell currentTab={currentTab} onTabChange={handleNavigateTab}>
+        {renderCurrentView()}
+      </AppShell>
+    </ComposerProvider>
   );
 }
 
@@ -68,8 +81,11 @@ function MainContent() {
 
   if (isLoading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background text-muted-foreground text-xs font-mono">
-        Authenticating session &lt; 2ms...
+      <div
+        role="status"
+        className="min-h-dvh flex items-center justify-center bg-background text-muted-foreground text-sm"
+      >
+        Loading your workspace…
       </div>
     );
   }
@@ -78,7 +94,7 @@ function MainContent() {
     return <LoginView />;
   }
 
-  return <Dashboard />;
+  return <Dashboard key={`${user.tenantId}:${user.id}`} />;
 }
 
 export function App() {
@@ -92,4 +108,3 @@ export function App() {
 }
 
 export default App;
-

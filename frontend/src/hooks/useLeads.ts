@@ -28,7 +28,7 @@ export function useLeads(filters: UseLeadsFilters = {}) {
 
   return useQuery({
     queryKey: queryKeys.leads.list(filters as Record<string, unknown>),
-    queryFn: () => apiFetch<Lead[]>(endpoint),
+    queryFn: ({ signal }) => apiFetch<Lead[]>(endpoint, { signal }),
     staleTime: 30 * 1000,
   });
 }
@@ -36,7 +36,7 @@ export function useLeads(filters: UseLeadsFilters = {}) {
 export function useLead(leadId: string | null) {
   return useQuery({
     queryKey: queryKeys.leads.detail(leadId || ''),
-    queryFn: () => apiFetch<Lead & { linkedConversationIds: string[] }>(`/api/leads/${leadId}`),
+    queryFn: ({ signal }) => apiFetch<Lead & { linkedConversationIds: string[] }>(`/api/leads/${encodeURIComponent(leadId || '')}`, { signal }),
     enabled: Boolean(leadId),
     staleTime: 15 * 1000,
   });
@@ -53,7 +53,7 @@ export function useUpdateLead(leadId: string | null) {
       }),
     onSuccess: (updatedLead) => {
       if (leadId) {
-        queryClient.setQueryData(queryKeys.leads.detail(leadId), updatedLead);
+        queryClient.setQueryData(queryKeys.leads.detail(leadId), (old: (Lead & { linkedConversationIds?: string[] }) | undefined) => ({ ...old, ...updatedLead }));
       }
       queryClient.invalidateQueries({ queryKey: queryKeys.leads.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
@@ -79,7 +79,7 @@ export function useCreateLead() {
 export function useLeadNotes(leadId: string | null) {
   return useQuery({
     queryKey: [...queryKeys.leads.detail(leadId || ''), 'notes'],
-    queryFn: () => apiFetch<InternalNote[]>(`/api/leads/${leadId}/notes`),
+    queryFn: ({ signal }) => apiFetch<InternalNote[]>(`/api/leads/${encodeURIComponent(leadId || '')}/notes`, { signal }),
     enabled: Boolean(leadId),
     staleTime: 10 * 1000,
   });

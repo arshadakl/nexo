@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/apiClient';
+import { queryClient } from '@/queries/queryClient';
 
 export interface AuthUser {
   id: string;
@@ -52,6 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' });
     } finally {
+      await queryClient.cancelQueries();
+      queryClient.clear();
       setUser(null);
     }
   };

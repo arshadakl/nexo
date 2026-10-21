@@ -1,28 +1,24 @@
 import * as React from 'react';
 import {
   Plus,
-  CheckCircle2,
-  Activity,
-  Zap,
-  Trash2,
-  Star,
   RefreshCw,
-  AlertTriangle,
-  Loader2,
-  SlidersHorizontal,
-  BookOpen,
   Lock,
-  Unlock,
-  ShieldCheck,
   Check,
-  Sparkles,
-  Bot,
+  Trash2,
+  Activity,
+  Star,
+  ShieldCheck,
+  Loader2,
+  BookOpen,
+  Zap,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog } from '@/components/ui/Dialog';
+import { ConfirmAction } from '@/components/ui/ConfirmAction';
+import { Field, SelectField, TextField, CheckField } from '@/components/ui/Field';
 import {
   useAIProviders,
   useAIProviderPresets,
@@ -41,14 +37,16 @@ import type { AIProviderPreset } from '@shared/types/ai.types';
 import type { KnowledgeCategory, BusinessKnowledgeItem } from '@shared/types/knowledge.types';
 
 export function AIAutomationView() {
-  const { data: providers, isLoading, refetch } = useAIProviders();
+  const [activeTab, setActiveTab] = React.useState<'knowledge' | 'providers' | 'behavior'>('knowledge');
+
+  const { data: providers, isLoading: isLoadingProviders, isError: isErrorProviders, refetch: refetchProviders } = useAIProviders();
   const { data: presets } = useAIProviderPresets();
-  const { data: knowledgeItems, isLoading: isLoadingKnowledge, refetch: refetchKnowledge } = useKnowledgeItems();
+  const { data: knowledgeItems, isLoading: isLoadingKnowledge, isError: isErrorKnowledge, refetch: refetchKnowledge } = useKnowledgeItems();
 
   const createProviderMutation = useCreateAIProvider();
   const testProviderMutation = useTestAIProvider();
   const setDefaultMutation = useSetDefaultAIProvider();
-  const deleteMutation = useDeleteAIProvider();
+  const deleteProviderMutation = useDeleteAIProvider();
 
   const togglePriceApprovalMutation = useTogglePriceApproval();
   const createKnowledgeMutation = useCreateKnowledgeItem();
@@ -61,6 +59,9 @@ export function AIAutomationView() {
     success: boolean;
     message: string;
   } | null>(null);
+
+  const [deletingKnowledge, setDeletingKnowledge] = React.useState<{ id: string; title: string } | null>(null);
+  const [deletingProvider, setDeletingProvider] = React.useState<{ id: string; name: string } | null>(null);
 
   // Add Provider Form state
   const [formData, setFormData] = React.useState({
@@ -124,8 +125,8 @@ export function AIAutomationView() {
         maxTokens: 600,
         isDefault: false,
       });
-    } catch (err) {
-      console.error('Failed to create provider', err);
+    } catch {
+      // Inline mutation error
     }
   };
 
@@ -138,7 +139,7 @@ export function AIAutomationView() {
       setTestNotification({
         success: res.success,
         message: res.success
-          ? `Online! Handshake latency: ${res.latencyMs}ms. Model: ${res.model}. Message: "${res.message}"`
+          ? `Connection verified (${res.latencyMs}ms). Model: ${res.model}.`
           : `Handshake failed: ${res.message}`,
       });
     } catch (err: any) {
@@ -182,29 +183,22 @@ export function AIAutomationView() {
             priceAed: '',
             isApprovedByClient: false,
           });
-          refetchKnowledge();
+          void refetchKnowledge();
         },
       }
     );
   };
 
-  const handleDeleteKnowledge = (id: string, title: string) => {
-    if (window.confirm(`Delete knowledge item "${title}"?`)) {
-      deleteKnowledgeMutation.mutate(id);
-    }
-  };
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 max-w-6xl">
       {/* View Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Bot className="w-5 h-5 text-primary" />
-            Resider AI Engine & Operational Guardrails
+          <h2 className="text-lg font-semibold tracking-tight text-content-primary">
+            AI & knowledge
           </h2>
-          <p className="text-xs text-muted-foreground">
-            Configure conversation flow rules, escrowed pricing approvals, and OpenAI-compatible inference providers
+          <p className="text-xs text-content-secondary mt-0.5">
+            Knowledge base items, price quotes, inference provider credentials, and conversation rules.
           </p>
         </div>
 
@@ -212,601 +206,565 @@ export function AIAutomationView() {
           <Button
             size="sm"
             variant="outline"
-            className="text-xs h-8 gap-1.5"
+            className="text-xs h-8 gap-1.5 bg-surface-panel border-border"
             onClick={() => {
-              refetch();
-              refetchKnowledge();
+              void refetchProviders();
+              void refetchKnowledge();
             }}
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Refresh</span>
           </Button>
 
-          <Button
-            size="sm"
-            className="text-xs h-8 gap-1.5 bg-primary text-primary-foreground shadow-sm"
-            onClick={() => setShowAddModal(true)}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Provider</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          SECTION A: RESIDER CONVERSATION FLOW ENGINE & GUARDRAIL SPECIFICATION
-      ========================================================================== */}
-      <Card className="border-indigo-500/30 bg-gradient-to-br from-indigo-950/20 via-background to-card shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
-              <Sparkles className="w-4 h-4 text-indigo-400" />
-              Resider Conversation Protocol v1.0 (Specification Conformance)
-            </CardTitle>
-            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-              Guardrails Enforced
-            </Badge>
-          </div>
-          <CardDescription className="text-xs">
-            Client-approved conversation boundaries for UAE residency, Malayalam tone matching, and partner handovers
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-            <div className="p-3 rounded-lg bg-secondary/30 border border-border/50 space-y-1">
-              <span className="font-semibold text-foreground flex items-center gap-1.5 text-[11px]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-                1. Voice & Script Matching
-              </span>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Malayalam script responses for Malayalam queries; "we" and "our team"; friendly, brief, and never claiming to be Anas personally.
-              </p>
-            </div>
-
-            <div className="p-3 rounded-lg bg-secondary/30 border border-border/50 space-y-1">
-              <span className="font-semibold text-foreground flex items-center gap-1.5 text-[11px]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-                2. One Question At A Time
-              </span>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Never interrogate. Answer the customer's question first, then ask only 1 concise follow-up to move the inquiry forward.
-              </p>
-            </div>
-
-            <div className="p-3 rounded-lg bg-secondary/30 border border-border/50 space-y-1">
-              <span className="font-semibold text-foreground flex items-center gap-1.5 text-[11px]">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                3. Privacy & ID Shield
-              </span>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Strict ban on asking for passport copies, nationality, or sensitive documents in chat. Those are handled later by the team.
-              </p>
-            </div>
-
-            <div className="p-3 rounded-lg bg-secondary/30 border border-border/50 space-y-1">
-              <span className="font-semibold text-foreground flex items-center gap-1.5 text-[11px]">
-                <Lock className="w-3.5 h-3.5 text-amber-400" />
-                9. Escrowed Price Shield
-              </span>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Prices (AED 7k–7.5k, AED 7.5k, AED 15k–20k) are strictly blocked from AI quotation until marked approved by the client below.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* =========================================================================
-          SECTION B: BUSINESS KNOWLEDGE BASE & CLIENT PRICING APPROVALS (Section 9)
-      ========================================================================== */}
-      <Card className="shadow-sm border-border/80">
-        <CardHeader className="pb-3 border-b border-border">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-primary" />
-                Knowledge Base & Escrowed Pricing Approvals
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Section 9 Guardrail: Toggle client approval to allow or block Resider AI from quoting specific packages and prices
-              </CardDescription>
-            </div>
+          {activeTab === 'knowledge' && (
             <Button
               size="sm"
-              variant="outline"
               className="text-xs h-8 gap-1.5"
               onClick={() => setShowAddKnowledgeModal(true)}
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Knowledge Item</span>
+              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Add knowledge item</span>
             </Button>
-          </div>
-        </CardHeader>
+          )}
 
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-secondary/40 border-b border-border text-muted-foreground uppercase text-[10px] tracking-wider">
-                <tr>
-                  <th className="px-5 py-3 font-semibold">Category</th>
-                  <th className="px-5 py-3 font-semibold">Package / Item Title</th>
-                  <th className="px-5 py-3 font-semibold">Price (AED)</th>
-                  <th className="px-5 py-3 font-semibold">AI Quotation Permission</th>
-                  <th className="px-5 py-3 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {isLoadingKnowledge ? (
-                  [1, 2, 3].map((i) => (
-                    <tr key={i}>
-                      <td className="px-5 py-3.5"><Skeleton className="h-4 w-20" /></td>
-                      <td className="px-5 py-3.5"><Skeleton className="h-4 w-48" /></td>
-                      <td className="px-5 py-3.5"><Skeleton className="h-4 w-16" /></td>
-                      <td className="px-5 py-3.5"><Skeleton className="h-6 w-32" /></td>
-                      <td className="px-5 py-3.5 text-right"><Skeleton className="h-6 w-20 ml-auto" /></td>
-                    </tr>
-                  ))
-                ) : knowledgeItems && knowledgeItems.length > 0 ? (
-                  knowledgeItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-secondary/20 transition-colors">
-                      <td className="px-5 py-3.5">
-                        <Badge variant="outline" className="text-[10px] capitalize">
-                          {item.category.replace(/_/g, ' ')}
-                        </Badge>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="font-semibold text-foreground">{item.title}</div>
-                        <div className="text-[11px] text-muted-foreground truncate max-w-[360px]">
-                          {item.content}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 font-mono font-semibold">
-                        {item.priceAed !== null && item.priceAed !== undefined ? (
-                          <span>AED {item.priceAed.toLocaleString()}</span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {item.isApprovedByClient ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                            <Unlock className="w-3 h-3" />
-                            Approved by Client (AI Can Quote)
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                            <Lock className="w-3 h-3" />
-                            Shielded (AI Blocked from Quoting)
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant={item.isApprovedByClient ? 'outline' : 'default'}
-                            className={`h-7 text-xs px-2.5 gap-1 ${
-                              item.isApprovedByClient
-                                ? 'text-amber-400 hover:text-amber-300 hover:border-amber-500/40'
-                                : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                            }`}
-                            onClick={() => handleToggleApproval(item)}
-                            disabled={togglePriceApprovalMutation.isPending}
-                          >
-                            {item.isApprovedByClient ? (
-                              <>
-                                <Lock className="w-3 h-3" />
-                                <span>Shield Price</span>
-                              </>
-                            ) : (
-                              <>
-                                <Check className="w-3 h-3" />
-                                <span>Approve Price</span>
-                              </>
-                            )}
-                          </Button>
-
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                            onClick={() => handleDeleteKnowledge(item.id, item.title)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="p-6 text-center text-muted-foreground text-xs">
-                      No knowledge items defined yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* =========================================================================
-          SECTION C: OPENAI-COMPATIBLE INFERENCE PROVIDERS
-      ========================================================================== */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Zap className="w-4 h-4 text-primary" />
-              Connected LLM Providers
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Zero-cold-start inference runtimes with encrypted credential vaults
-            </p>
-          </div>
-        </div>
-
-        {/* Test Notification Banner */}
-        {testNotification && (
-          <div
-            className={`p-3 rounded-lg border text-xs flex items-center justify-between ${
-              testNotification.success
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                : 'bg-destructive/10 border-destructive/30 text-destructive'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {testNotification.success ? (
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-              ) : (
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-              )}
-              <span>{testNotification.message}</span>
-            </div>
-            <button
-              onClick={() => setTestNotification(null)}
-              className="text-xs opacity-70 hover:opacity-100"
+          {activeTab === 'providers' && (
+            <Button
+              size="sm"
+              className="text-xs h-8 gap-1.5"
+              onClick={() => setShowAddModal(true)}
             >
-              Dismiss
-            </button>
-          </div>
-        )}
+              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Add provider</span>
+            </Button>
+          )}
+        </div>
+      </div>
 
-        {/* Providers Grid */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="p-4 space-y-3">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-3 w-48" />
-                <Skeleton className="h-8 w-full" />
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(providers || []).map((p) => {
-              const isCurrentlyTesting = testingId === p.id;
-              return (
-                <Card
-                  key={p.id}
-                  className={
-                    p.isDefault
-                      ? 'border-primary/50 shadow-sm shadow-primary/5 bg-card/90'
-                      : 'bg-card/60'
-                  }
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-bold flex items-center gap-2">
-                        {p.name}
-                      </CardTitle>
-                      {p.isDefault && (
-                        <Badge variant="default" className="text-[10px] gap-1">
-                          <Star className="w-2.5 h-2.5 fill-current" />
-                          Default
-                        </Badge>
-                      )}
-                    </div>
-                    <CardDescription className="font-mono text-[11px] truncate">
-                      {p.baseUrl}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-xs">
-                    <div className="flex justify-between py-1 border-b border-border/50">
-                      <span className="text-muted-foreground">Model ID:</span>
-                      <span className="font-mono font-medium text-foreground">{p.defaultModel}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-border/50">
-                      <span className="text-muted-foreground">Encrypted Key:</span>
-                      <span className="font-mono text-muted-foreground">{p.maskedApiKey}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-border/50">
-                      <span className="text-muted-foreground">Health Status:</span>
-                      <span
-                        className={`font-semibold capitalize ${
-                          p.lastHealthStatus === 'healthy'
-                            ? 'text-emerald-400'
-                            : p.lastHealthStatus === 'unauthorized'
-                            ? 'text-destructive'
-                            : 'text-muted-foreground'
-                        }`}
-                      >
-                        {p.lastHealthStatus}
-                        {p.lastHealthLatencyMs ? ` (${p.lastHealthLatencyMs}ms)` : ''}
-                      </span>
-                    </div>
+      {/* Tabs navigation */}
+      <div className="flex border-b border-border space-x-6 text-xs">
+        <button
+          type="button"
+          onClick={() => setActiveTab('knowledge')}
+          className={`pb-2.5 font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+            activeTab === 'knowledge'
+              ? 'border-accent text-content-primary'
+              : 'border-transparent text-content-secondary hover:text-content-primary'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" aria-hidden="true" />
+          <span>Knowledge base</span>
+        </button>
 
-                    <div className="pt-2 flex flex-col gap-2">
-                      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('providers')}
+          className={`pb-2.5 font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+            activeTab === 'providers'
+              ? 'border-accent text-content-primary'
+              : 'border-transparent text-content-secondary hover:text-content-primary'
+          }`}
+        >
+          <Zap className="w-4 h-4" aria-hidden="true" />
+          <span>Model providers</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('behavior')}
+          className={`pb-2.5 font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+            activeTab === 'behavior'
+              ? 'border-accent text-content-primary'
+              : 'border-transparent text-content-secondary hover:text-content-primary'
+          }`}
+        >
+          <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
+          <span>System behavior & rules</span>
+        </button>
+      </div>
+
+      {/* TAB 1: KNOWLEDGE BASE */}
+      {activeTab === 'knowledge' && (
+        <div className="space-y-4">
+          <Card className="bg-surface-panel border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-content-primary">
+                Approved packages & service pricing
+              </CardTitle>
+              <CardDescription className="text-xs text-content-secondary mt-0.5">
+                Pricing is strictly shielded until explicitly approved. Unapproved prices are never quoted by Resider AI.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-surface-base border-y border-border text-content-secondary text-[11px] uppercase tracking-wider font-medium">
+                    <tr>
+                      <th className="px-4 py-2.5">Category</th>
+                      <th className="px-4 py-2.5">Package title</th>
+                      <th className="px-4 py-2.5">Price (AED)</th>
+                      <th className="px-4 py-2.5">Quoting permission</th>
+                      <th className="px-4 py-2.5 text-right"><span className="sr-only">Actions</span></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {isLoadingKnowledge ? (
+                      [1, 2, 3].map((i) => (
+                        <tr key={i}>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-40" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                          <td className="px-4 py-3 text-right"><Skeleton className="h-4 w-20 ml-auto" /></td>
+                        </tr>
+                      ))
+                    ) : isErrorKnowledge ? (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-danger text-xs">
+                          Could not load knowledge items. Please retry.
+                        </td>
+                      </tr>
+                    ) : knowledgeItems && knowledgeItems.length > 0 ? (
+                      knowledgeItems.map((item) => (
+                        <tr key={item.id} className="hover:bg-surface-hover/70 transition-colors">
+                          <td className="px-4 py-3">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-border bg-surface-base text-content-secondary capitalize">
+                              {item.category.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="font-medium text-content-primary block">{item.title}</span>
+                            <span className="text-[11px] text-content-secondary line-clamp-1 mt-0.5">{item.content}</span>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-content-primary">
+                            {item.priceAed != null ? `${item.priceAed.toLocaleString()} AED` : '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            {item.isApprovedByClient ? (
+                              <span className="text-[11px] text-success font-medium flex items-center gap-1">
+                                <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                                Permitted to quote
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-warning font-medium flex items-center gap-1">
+                                <Lock className="w-3.5 h-3.5" aria-hidden="true" />
+                                Shielded (Internal only)
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs px-2 gap-1 bg-surface-panel border-border"
+                                onClick={() => handleToggleApproval(item)}
+                                disabled={togglePriceApprovalMutation.isPending}
+                              >
+                                {item.isApprovedByClient ? (
+                                  <>
+                                    <Lock className="w-3 h-3 text-warning" aria-hidden="true" />
+                                    <span>Shield</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="w-3 h-3 text-success" aria-hidden="true" />
+                                    <span>Approve</span>
+                                  </>
+                                )}
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-content-secondary hover:text-danger"
+                                onClick={() => setDeletingKnowledge({ id: item.id, title: item.title })}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-content-secondary text-xs">
+                          No knowledge items registered yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* TAB 2: MODEL PROVIDERS */}
+      {activeTab === 'providers' && (
+        <div className="space-y-4">
+          {testNotification && (
+            <div
+              role="status"
+              className={`p-3 rounded-md border text-xs flex items-center justify-between ${
+                testNotification.success
+                  ? 'bg-success/10 border-success/30 text-success'
+                  : 'bg-danger/10 border-danger/30 text-danger'
+              }`}
+            >
+              <span>{testNotification.message}</span>
+              <button
+                type="button"
+                onClick={() => setTestNotification(null)}
+                className="text-xs opacity-70 hover:opacity-100"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {isErrorProviders && (
+            <div role="alert" className="p-3 rounded-md border border-danger/30 bg-danger/10 text-xs text-danger">
+              Could not load AI providers. Please retry.
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {isLoadingProviders ? (
+              [1, 2, 3].map((i) => (
+                <Card key={i} className="p-4 space-y-3 bg-surface-panel border-border">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                  <Skeleton className="h-8 w-full" />
+                </Card>
+              ))
+            ) : providers && providers.length > 0 ? (
+              providers.map((p) => {
+                const isCurrentlyTesting = testingId === p.id;
+                return (
+                  <Card
+                    key={p.id}
+                    className={`bg-surface-panel border-border ${p.isDefault ? 'border-accent/40' : ''}`}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-semibold text-content-primary flex items-center gap-2">
+                          {p.name}
+                        </CardTitle>
+                        {p.isDefault && (
+                          <span className="text-[10px] text-accent font-medium flex items-center gap-1 border border-accent/30 rounded px-1.5 py-0.2">
+                            <Star className="w-2.5 h-2.5 fill-current" aria-hidden="true" />
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <CardDescription className="font-mono text-[11px] text-content-secondary truncate mt-0.5">
+                        {p.baseUrl}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-xs">
+                      <div className="flex justify-between py-1 border-b border-border">
+                        <span className="text-content-secondary">Model:</span>
+                        <span className="font-mono text-content-primary font-medium">{p.defaultModel}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border">
+                        <span className="text-content-secondary">Key:</span>
+                        <span className="font-mono text-content-secondary">{p.maskedApiKey}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border">
+                        <span className="text-content-secondary">Status:</span>
+                        <span
+                          className={`font-medium capitalize ${
+                            p.lastHealthStatus === 'healthy'
+                              ? 'text-success'
+                              : p.lastHealthStatus === 'unauthorized'
+                              ? 'text-danger'
+                              : 'text-content-secondary'
+                          }`}
+                        >
+                          {p.lastHealthStatus || 'Not tested'}
+                          {p.lastHealthLatencyMs ? ` (${p.lastHealthLatencyMs}ms)` : ''}
+                        </span>
+                      </div>
+
+                      <div className="pt-2 flex items-center gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="flex-1 text-xs h-8 gap-1.5"
+                          className="flex-1 text-xs h-8 gap-1.5 bg-surface-panel border-border"
                           disabled={isCurrentlyTesting}
                           onClick={() => handleRunTest(p.id)}
                         >
                           {isCurrentlyTesting ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                           ) : (
-                            <Activity className="w-3.5 h-3.5" />
+                            <Activity className="w-3.5 h-3.5" aria-hidden="true" />
                           )}
-                          <span>{isCurrentlyTesting ? 'Testing...' : 'Test Connection'}</span>
+                          <span>{isCurrentlyTesting ? 'Testing…' : 'Test'}</span>
                         </Button>
 
                         {!p.isDefault && (
                           <Button
                             size="sm"
-                            variant="secondary"
-                            className="text-xs h-8 px-2.5"
-                            title="Set as Default Provider"
+                            variant="outline"
+                            className="text-xs h-8 px-2.5 bg-surface-panel border-border"
+                            title="Set as default"
                             onClick={() => setDefaultMutation.mutate(p.id)}
                           >
-                            <Star className="w-3.5 h-3.5 text-muted-foreground" />
+                            <Star className="w-3.5 h-3.5 text-content-secondary" aria-hidden="true" />
                           </Button>
                         )}
 
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-xs h-8 px-2 text-muted-foreground hover:text-destructive"
-                          title="Delete Provider"
-                          onClick={() => {
-                            if (confirm(`Delete provider "${p.name}"?`)) {
-                              deleteMutation.mutate(p.id);
-                            }
-                          }}
+                          className="text-xs h-8 px-2 text-content-secondary hover:text-danger"
+                          title="Delete provider"
+                          onClick={() => setDeletingProvider({ id: p.id, name: p.name })}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                         </Button>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    </CardContent>
+                  </Card>
+                );
+              })
+            ) : (
+              <div className="col-span-full p-8 text-center text-content-secondary border border-dashed border-border rounded-lg">
+                <p className="text-sm font-medium text-content-primary">No providers configured</p>
+                <p className="text-xs mt-1">Add an OpenAI-compatible API endpoint to handle customer message generation.</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-
-      {/* Add Provider Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg shadow-2xl border-border">
-            <CardHeader>
-              <CardTitle className="text-base font-bold">Add OpenAI-Compatible Provider</CardTitle>
-              <CardDescription className="text-xs">
-                Pick a quick preset or enter your custom endpoint URL and model. Stored securely with AES-256-GCM.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs">
-                {/* Preset Selector */}
-                {presets && presets.length > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-foreground flex items-center gap-1.5">
-                      <SlidersHorizontal className="w-3.5 h-3.5 text-primary" />
-                      Quick Preset
-                    </label>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {presets.map((preset) => (
-                        <Button
-                          key={preset.id}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-[11px] truncate"
-                          onClick={() => handleSelectPreset(preset)}
-                        >
-                          {preset.name.split(' ')[0]}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Provider Label *</label>
-                  <Input
-                    required
-                    placeholder="e.g. Groq Production"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="text-xs"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Base API URL *</label>
-                  <Input
-                    required
-                    type="url"
-                    placeholder="https://api.groq.com/openai/v1"
-                    value={formData.baseUrl}
-                    onChange={(e) => setFormData({ ...formData, baseUrl: e.target.value })}
-                    className="text-xs font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">API Key *</label>
-                  <Input
-                    required
-                    type="password"
-                    placeholder="sk-..."
-                    value={formData.apiKey}
-                    onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                    className="text-xs font-mono"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="font-semibold text-foreground">Model Identifier *</label>
-                    <Input
-                      required
-                      placeholder="llama-3.3-70b-versatile"
-                      value={formData.defaultModel}
-                      onChange={(e) => setFormData({ ...formData, defaultModel: e.target.value })}
-                      className="text-xs font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-semibold text-foreground">Max Output Tokens</label>
-                    <Input
-                      type="number"
-                      min={50}
-                      max={4096}
-                      value={formData.maxTokens}
-                      onChange={(e) => setFormData({ ...formData, maxTokens: Number(e.target.value) })}
-                      className="text-xs font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-3 flex justify-end gap-2 border-t border-border">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowAddModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={createProviderMutation.isPending}
-                  >
-                    {createProviderMutation.isPending ? 'Saving...' : 'Save & Encrypt Key'}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
         </div>
       )}
 
-      {/* Add Knowledge Item Modal */}
-      {showAddKnowledgeModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg shadow-2xl border-border">
-            <CardHeader>
-              <CardTitle className="text-base font-bold">Add Business Knowledge Base Item</CardTitle>
-              <CardDescription className="text-xs">
-                Package descriptions, policies, or FAQ injected into Resider AI context
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleCreateKnowledgeSubmit} className="space-y-4 text-xs">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="font-semibold text-foreground">Category *</label>
-                    <select
-                      value={knowledgeForm.category}
-                      onChange={(e) =>
-                        setKnowledgeForm({ ...knowledgeForm, category: e.target.value as KnowledgeCategory })
-                      }
-                      className="w-full h-8 rounded-md border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+      {/* TAB 3: SYSTEM BEHAVIOR & RULES */}
+      {activeTab === 'behavior' && (
+        <Card className="bg-surface-panel border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-content-primary">
+              Resider conversation protocol rules
+            </CardTitle>
+            <CardDescription className="text-xs text-content-secondary mt-0.5">
+              Read-only view of the deterministic prompt structure enforced on every outbound AI draft.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-xs text-content-secondary">
+            <div className="p-3.5 rounded-md border border-border bg-surface-base space-y-2">
+              <h4 className="font-medium text-content-primary">1. Single Question Rule</h4>
+              <p>The AI asks only one missing qualification item at a time to keep conversation friction minimal on messaging apps.</p>
+            </div>
+            <div className="p-3.5 rounded-md border border-border bg-surface-base space-y-2">
+              <h4 className="font-medium text-content-primary">2. Explicit Pricing Guardrail</h4>
+              <p>Prices are quoted exclusively from approved knowledge items. If an applicant asks for an unapproved package or customized quote, the AI escalates to human review.</p>
+            </div>
+            <div className="p-3.5 rounded-md border border-border bg-surface-base space-y-2">
+              <h4 className="font-medium text-content-primary">3. External Handover Permission</h4>
+              <p>Applicant contact details are never transferred to external consulting partners without recorded customer consent.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Add Provider Dialog */}
+      {showAddModal && (
+        <Dialog
+          title="Add OpenAI-compatible provider"
+          onClose={() => setShowAddModal(false)}
+          isBusy={createProviderMutation.isPending}
+        >
+          <form onSubmit={handleCreateSubmit} className="space-y-4 p-5">
+            {presets && presets.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-medium text-content-secondary block">Presets</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {presets.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      className="text-[11px] px-2 py-1 rounded border border-border bg-surface-panel hover:bg-surface-hover text-content-primary"
+                      onClick={() => handleSelectPreset(preset)}
                     >
-                      <option value="residency_package">Residency Package</option>
-                      <option value="business_service">Business Setup Service</option>
-                      <option value="policy">Consulting Policy</option>
-                      <option value="faq">FAQ</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-semibold text-foreground">Price AED (Optional)</label>
-                    <Input
-                      type="number"
-                      placeholder="e.g. 7500"
-                      value={knowledgeForm.priceAed}
-                      onChange={(e) => setKnowledgeForm({ ...knowledgeForm, priceAed: e.target.value })}
-                      className="text-xs font-mono"
-                    />
-                  </div>
+                      {preset.name}
+                    </button>
+                  ))}
                 </div>
+              </div>
+            )}
 
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Title *</label>
-                  <Input
-                    required
-                    placeholder="e.g. Freelance Permit & Residency"
-                    value={knowledgeForm.title}
-                    onChange={(e) => setKnowledgeForm({ ...knowledgeForm, title: e.target.value })}
-                    className="text-xs"
-                  />
-                </div>
+            <Field
+              required
+              label="Provider name *"
+              placeholder="e.g. Workers AI / Groq"
+              value={formData.name}
+              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+            />
 
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Content / Details *</label>
-                  <textarea
-                    required
-                    rows={3}
-                    placeholder="Detailed description of deliverables, stages, or terms..."
-                    value={knowledgeForm.content}
-                    onChange={(e) => setKnowledgeForm({ ...knowledgeForm, content: e.target.value })}
-                    className="w-full bg-muted/20 border border-border rounded-lg p-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                  />
-                </div>
+            <Field
+              required
+              label="Base URL *"
+              placeholder="https://api.groq.com/openai/v1"
+              value={formData.baseUrl}
+              onChange={(e) => setFormData((prev) => ({ ...prev, baseUrl: e.target.value }))}
+            />
 
-                <div className="p-3 rounded-lg bg-muted/30 border border-border/70">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs">
-                    <input
-                      type="checkbox"
-                      checked={knowledgeForm.isApprovedByClient}
-                      onChange={(e) =>
-                        setKnowledgeForm({ ...knowledgeForm, isApprovedByClient: e.target.checked })
-                      }
-                      className="rounded border-border text-primary focus:ring-primary"
-                    />
-                    <span>Approved by Client (Permit AI to quote this package / price immediately)</span>
-                  </label>
-                </div>
+            <Field
+              required
+              label="API key *"
+              type="password"
+              placeholder="gsk_…"
+              value={formData.apiKey}
+              onChange={(e) => setFormData((prev) => ({ ...prev, apiKey: e.target.value }))}
+            />
 
-                <div className="pt-3 flex justify-end gap-2 border-t border-border">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowAddKnowledgeModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={createKnowledgeMutation.isPending}
-                  >
-                    {createKnowledgeMutation.isPending ? 'Saving...' : 'Save Knowledge Item'}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+            <Field
+              required
+              label="Model ID *"
+              placeholder="llama-3.3-70b-versatile"
+              value={formData.defaultModel}
+              onChange={(e) => setFormData((prev) => ({ ...prev, defaultModel: e.target.value }))}
+            />
+
+            <CheckField
+              label="Set as default inference provider"
+              checked={formData.isDefault}
+              onChange={(e) => setFormData((prev) => ({ ...prev, isDefault: e.target.checked }))}
+            />
+
+            {createProviderMutation.isError && (
+              <p role="alert" className="text-xs text-danger">
+                {createProviderMutation.error.message || 'Could not register provider.'}
+              </p>
+            )}
+
+            <div className="pt-3 border-t border-border flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={createProviderMutation.isPending}
+                onClick={() => setShowAddModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={createProviderMutation.isPending || !formData.name || !formData.baseUrl || !formData.apiKey || !formData.defaultModel}
+              >
+                {createProviderMutation.isPending ? 'Saving…' : 'Save provider'}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+
+      {/* Add Knowledge Item Dialog */}
+      {showAddKnowledgeModal && (
+        <Dialog
+          title="Add knowledge item"
+          onClose={() => setShowAddKnowledgeModal(false)}
+          isBusy={createKnowledgeMutation.isPending}
+        >
+          <form onSubmit={handleCreateKnowledgeSubmit} className="space-y-4 p-5">
+            <SelectField
+              label="Category"
+              value={knowledgeForm.category}
+              onChange={(e) => setKnowledgeForm((prev) => ({ ...prev, category: e.target.value as KnowledgeCategory }))}
+            >
+              <option value="residency_package">Residency package</option>
+              <option value="business_license">Business license</option>
+              <option value="emirates_id_process">Emirates ID process</option>
+              <option value="tax_guideline">Tax guideline</option>
+              <option value="banking_requirement">Banking requirement</option>
+              <option value="faq">FAQ</option>
+            </SelectField>
+
+            <Field
+              required
+              label="Package / item title *"
+              placeholder="e.g. 2-Year Green Visa Package"
+              value={knowledgeForm.title}
+              onChange={(e) => setKnowledgeForm((prev) => ({ ...prev, title: e.target.value }))}
+            />
+
+            <TextField
+              required
+              label="Knowledge content *"
+              placeholder="Explain deliverables, timeline, and eligibility..."
+              value={knowledgeForm.content}
+              onChange={(e) => setKnowledgeForm((prev) => ({ ...prev, content: e.target.value }))}
+            />
+
+            <Field
+              label="Price (AED, optional)"
+              type="number"
+              placeholder="12500"
+              value={knowledgeForm.priceAed}
+              onChange={(e) => setKnowledgeForm((prev) => ({ ...prev, priceAed: e.target.value }))}
+            />
+
+            <CheckField
+              label="Approve price for automated customer quoting"
+              checked={knowledgeForm.isApprovedByClient}
+              onChange={(e) => setKnowledgeForm((prev) => ({ ...prev, isApprovedByClient: e.target.checked }))}
+            />
+
+            {createKnowledgeMutation.isError && (
+              <p role="alert" className="text-xs text-danger">
+                {createKnowledgeMutation.error.message || 'Could not create knowledge item.'}
+              </p>
+            )}
+
+            <div className="pt-3 border-t border-border flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={createKnowledgeMutation.isPending}
+                onClick={() => setShowAddKnowledgeModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={createKnowledgeMutation.isPending || !knowledgeForm.title.trim() || !knowledgeForm.content.trim()}
+              >
+                {createKnowledgeMutation.isPending ? 'Saving…' : 'Save knowledge item'}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+
+      {/* Delete Knowledge Confirmation */}
+      {deletingKnowledge && (
+        <ConfirmAction
+          title={`Delete "${deletingKnowledge.title}"?`}
+          actionLabel="Delete item"
+          onConfirm={async () => {
+            await deleteKnowledgeMutation.mutateAsync(deletingKnowledge.id);
+          }}
+          onClose={() => setDeletingKnowledge(null)}
+        >
+          Are you sure you want to delete this knowledge item? It will no longer be available for AI draft quoting.
+        </ConfirmAction>
+      )}
+
+      {/* Delete Provider Confirmation */}
+      {deletingProvider && (
+        <ConfirmAction
+          title={`Delete provider "${deletingProvider.name}"?`}
+          actionLabel="Delete provider"
+          onConfirm={async () => {
+            await deleteProviderMutation.mutateAsync(deletingProvider.id);
+          }}
+          onClose={() => setDeletingProvider(null)}
+        >
+          Are you sure you want to delete this provider? If this was the default model provider, another provider must be selected.
+        </ConfirmAction>
       )}
     </div>
   );

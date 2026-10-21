@@ -1,155 +1,111 @@
-import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { useState, type FormEvent } from 'react';
+import { AlertCircle, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/AuthContext';
-import { Sparkles, Lock, Mail, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export function LoginView() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('timefade@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const hasMinLength = password.length >= 8;
-  const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password);
-  const isValid = hasMinLength && hasUpper && hasLower;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isValid) {
-      setError('Password must be at least 8 characters with at least one uppercase and one lowercase letter.');
-      return;
-    }
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSubmitting) return;
 
     setError(null);
     setIsSubmitting(true);
     try {
-      await login(email, password);
-    } catch (err: any) {
-      setError(err?.message || 'Invalid email or password.');
+      // The server validates credentials and first-login password requirements.
+      await login(email.trim(), password);
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'Unable to sign in. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-screen flex flex-col items-center justify-center bg-background px-4 relative overflow-hidden">
-      {/* Background Glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-background px-6 py-12 sm:px-8">
+      <div className="w-full max-w-sm">
+        <div className="mb-12 flex items-center gap-3">
+          <img src="/resider.svg" alt="" className="size-8" />
+          <span className="text-base font-semibold text-foreground">Resider</span>
+        </div>
 
-      <div className="w-full max-w-md relative z-10 space-y-6">
-        {/* Brand */}
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primary to-indigo-400 flex items-center justify-center text-primary-foreground font-bold shadow-lg shadow-primary/25 mx-auto">
-            <Sparkles className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Sign in to Nexo Edge
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            Fast edge authentication &bull; Ultra-low CPU overhead
+        <div className="mb-8 space-y-2">
+          <h1 className="text-xl font-semibold leading-7 text-foreground">Sign in to your workspace</h1>
+          <p className="text-sm leading-5 text-secondary-foreground">
+            Continue to your conversations and customer work.
           </p>
         </div>
 
-        {/* Card */}
-        <Card className="border-border bg-card/60 backdrop-blur-xl shadow-2xl">
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-lg">Staff Authentication</CardTitle>
-            <CardDescription className="text-xs">
-              Enter your work email and password to enter the CRM.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="p-3 rounded-lg bg-destructive/15 border border-destructive/30 flex items-start gap-2.5 text-xs text-destructive">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
+        <form onSubmit={handleSubmit} aria-busy={isSubmitting} className="space-y-5">
+          <div className="space-y-2">
+            <label htmlFor="work-email" className="block text-[13px] font-medium text-foreground">
+              Work email
+            </label>
+            <Input
+              id="work-email"
+              name="email"
+              type="email"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@company.com"
+              readOnly={isSubmitting}
+              aria-describedby={error ? 'sign-in-error' : undefined}
+              className="h-11"
+            />
+          </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Work Email</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-muted-foreground absolute left-3 top-2.5" />
-                  <Input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="counselor@visahorizon.com"
-                    className="pl-9 text-xs h-9"
-                  />
-                </div>
-              </div>
+          <div className="space-y-2">
+            <label htmlFor="password" className="block text-[13px] font-medium text-foreground">
+              Password
+            </label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              readOnly={isSubmitting}
+              aria-describedby={error ? 'sign-in-error' : undefined}
+              className="h-11"
+            />
+          </div>
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-foreground">Password</label>
-                  <span className="text-[10px] text-muted-foreground">Min 8 chars (1 Upper, 1 Lower)</span>
-                </div>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-muted-foreground absolute left-3 top-2.5" />
-                  <Input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="pl-9 text-xs h-9"
-                  />
-                </div>
+          {error && (
+            <div id="sign-in-error" role="alert" className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger/10 p-3 text-[13px] leading-5 text-danger">
+              <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-                {/* Password Criteria indicators */}
-                <div className="pt-2 flex flex-wrap gap-2 text-[10px]">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${hasMinLength ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-secondary/40 text-muted-foreground border-border'}`}>
-                    <CheckCircle2 className="w-3 h-3" /> 8+ chars
-                  </span>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${hasUpper ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-secondary/40 text-muted-foreground border-border'}`}>
-                    <CheckCircle2 className="w-3 h-3" /> 1 uppercase
-                  </span>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${hasLower ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-secondary/40 text-muted-foreground border-border'}`}>
-                    <CheckCircle2 className="w-3 h-3" /> 1 lowercase
-                  </span>
-                </div>
-              </div>
+          <Button type="submit" disabled={isSubmitting} className="h-11 w-full">
+            {isSubmitting ? 'Signing in…' : 'Continue'}
+            {!isSubmitting && <ArrowRight aria-hidden="true" className="size-4" />}
+          </Button>
+        </form>
 
-              <Button
-                type="submit"
-                disabled={isSubmitting || !isValid}
-                className="w-full text-xs h-9 font-medium gap-1.5 mt-2"
-              >
-                {isSubmitting ? 'Authenticating (< 2ms)...' : 'Sign In to Dashboard'}
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* Links to Privacy Policy and Terms */}
-        <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-          <a
-            href="/privacy-policy"
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-foreground underline underline-offset-4 transition-colors"
-          >
-            Privacy Policy
-          </a>
-          <span>&bull;</span>
-          <a
-            href="/terms"
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-foreground underline underline-offset-4 transition-colors"
-          >
-            Terms of Service
-          </a>
-        </div>
+        <footer className="mt-8 border-t border-border pt-6">
+          <nav aria-label="Legal" className="flex flex-wrap gap-x-6 gap-y-3 text-xs text-muted-foreground">
+            <a href="/privacy-policy" target="_blank" rel="noreferrer" className="py-2 underline-offset-4 hover:text-foreground hover:underline">
+              Privacy policy
+            </a>
+            <a href="/terms" target="_blank" rel="noreferrer" className="py-2 underline-offset-4 hover:text-foreground hover:underline">
+              Terms of service
+            </a>
+          </nav>
+        </footer>
       </div>
-    </div>
+    </main>
   );
 }
