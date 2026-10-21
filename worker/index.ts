@@ -21,6 +21,9 @@ import { whatsappRoutes } from './routes/whatsapp.routes';
 import { analyticsRoutes } from './routes/analytics.routes';
 import { authRoutes } from './routes/auth.routes';
 import { privacyRoutes } from './routes/privacy.routes';
+import { draftRoutes } from './routes/draft.routes';
+import { expertRoutes } from './routes/expert.routes';
+import { knowledgeRoutes } from './routes/knowledge.routes';
 
 // Mount public and API routes
 app.route('/api/auth', authRoutes);
@@ -30,6 +33,9 @@ app.route('/api/integrations/whatsapp', whatsappRoutes);
 app.route('/api/integrations', integrationRoutes);
 app.route('/api/conversations', conversationRoutes);
 app.route('/api/leads', leadRoutes);
+app.route('/api/drafts', draftRoutes);
+app.route('/api/experts', expertRoutes);
+app.route('/api/knowledge', knowledgeRoutes);
 app.route('/api/analytics', analyticsRoutes);
 app.route('/webhooks', webhookRoutes);
 app.route('/', privacyRoutes);

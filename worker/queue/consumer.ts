@@ -3,6 +3,10 @@ import { instagramSendApiAdapter } from '../adapters/meta/instagramSendApi';
 import { whatsappSendApiAdapter } from '../adapters/meta/whatsappSendApi';
 import { aiProviderRepository } from '../repositories/aiProviderRepository';
 import { connectionRepository } from '../repositories/connectionRepository';
+import { knowledgeRepository } from '../repositories/knowledgeRepository';
+import { expertRepository } from '../repositories/expertRepository';
+import { draftRepository } from '../repositories/draftRepository';
+import { buildResiderSystemPrompt } from '../lib/residerPrompt';
 import { logger } from '../lib/logger';
 import type { WorkerEnv } from '../env';
 import type { PromptMessage } from '../adapters/ai/adapter.interface';
@@ -164,28 +168,37 @@ export async function processQueueBatch(
       // 6. Look up existing lead details for contextual conversational state
       const existingLeadLink = await env.DB
         .prepare(`
-          SELECT l.id, l.full_name, l.phone_or_email, l.service_vertical, l.residency_intent, l.work_business_activity, l.uae_location_context
+          SELECT l.id, l.full_name, l.phone_or_email, l.service_vertical, l.residency_intent,
+                 l.work_business_activity, l.uae_location_context, l.target_emirate,
+                 l.timeline, l.lead_status, l.missing_details_json, l.questions_answered_json
           FROM lead_conversation_links lcl
           JOIN leads l ON l.id = lcl.lead_id
           WHERE lcl.conversation_id = ?
           ORDER BY lcl.linked_at DESC LIMIT 1
         `)
         .bind(conversationId)
-        .first<{
-          id: string;
-          full_name: string | null;
-          phone_or_email: string | null;
-          service_vertical: string | null;
-          residency_intent: string | null;
-          work_business_activity: string | null;
-          uae_location_context: string | null;
-        }>();
+        .first<any>();
 
       const knownName = existingLeadLink?.full_name && existingLeadLink.full_name !== 'Applicant' && existingLeadLink.full_name !== 'Instagram User'
         ? existingLeadLink.full_name
         : (senderName && senderName !== 'Instagram User' && senderName !== 'Applicant' ? senderName : null);
       const knownPhone = existingLeadLink?.phone_or_email || null;
       const knownActivity = existingLeadLink?.work_business_activity || null;
+
+      // Retrieve approved business knowledge and verified experts
+      const approvedKnowledge = await knowledgeRepository.listApprovedKnowledge(env.DB, tenantId);
+      const availableExperts = await expertRepository.listExperts(env.DB, tenantId, {
+        isVerified: true,
+        isAvailable: true,
+        limit: 10,
+      });
+
+      let missingDetailsArray: string[] = [];
+      try {
+        if (existingLeadLink?.missing_details_json) {
+          missingDetailsArray = JSON.parse(existingLeadLink.missing_details_json);
+        }
+      } catch {}
 
       // Build prompt context (last 12 non-empty messages in chronological order)
       const recentMessagesRows = await env.DB
@@ -203,68 +216,26 @@ export async function processQueueBatch(
         .bind(conversationId)
         .all<any>();
 
-      const systemPrompt = `You are Sarah, a friendly and helpful residency advisor for Nexo in Dubai, UAE.
-You assist clients via Instagram DMs and WhatsApp in simple, easy-to-understand English.
-
-OUR SERVICES & PRICES:
-1. Long-term Residency Package (Permit + Residency): AED 7,000–7,500
-2. Freelance Permit / Residency Visa: Starting from AED 7,500
-3. Standard Residency Visa: AED 15,000–20,000
-We help freelancers, business owners, and property buyers get their UAE residency smoothly.
-
-CURRENT CLIENT DETAILS:
-- Name: ${knownName || 'Not given yet'}
-- Contact: ${knownPhone || 'Not given yet'}
-- Activity: ${knownActivity || 'Not shared yet'}
-
-CONVERSATION RULES:
-1. Speak in simple, friendly, natural English. Keep each message short (1 to 2 sentences).
-2. Ask only ONE question at a time.
-3. NEVER repeat a question that the client already answered or that was already asked in the chat history.
-
-STEP-BY-STEP FLOW:
-- STEP 1 (Name): If name is unknown:
-  Greet warmly and ask for their name simply:
-  "Hello! Welcome to Nexo. I'm happy to help you with Dubai residency. May I know your name, please?"
-
-- STEP 2 (Package Choice): Once name is known, if they haven't chosen a package yet:
-  "Nice to meet you, [Name]! Are you interested in our Freelance Permit (AED 7,500), Long-term Package (AED 7,000–7,500), or Residency Visa (AED 15,000–20,000)?"
-
-- STEP 3 (Phone Number): Once package is chosen, if phone is unknown:
-  "Great choice! What is your WhatsApp number? I'll send you the document checklist and official fee breakdown."
-
-- STEP 4 (Lifestyle / Sport / Interest): Once phone is given, if sport/workout has NOT been asked yet:
-  "Got it! By the way, while we prepare your file, do you have any favorite sport or workout like gym, padel, or running?"
-
-- STEP 5 (Wrap-up & Consultation Booking): If they replied to the sport question (even if they say "no preference", "none", "gym", "football", or anything else):
-  Do NOT ask about sports again! Say:
-  "Thank you so much, [Name]! Our senior residency consultant will review your file and message you on WhatsApp shortly to set up your consultation. Have a great day!"
-
-If the client asks any general question (e.g. "how long does it take?"), answer it simply and clearly in 1 sentence, then continue the flow.
-
-OUTPUT FORMAT:
-Reply ONLY with a valid JSON object matching this schema:
-{
-  "intent": "permanent_residency",
-  "language": "en",
-  "replyText": "your simple message here",
-  "extractedFields": {
-    "fullName": "extracted name or null",
-    "phone": "extracted phone number or null",
-    "favoriteSport": "extracted sport or if declined write 'None' or 'Gym' etc, or null",
-    "servicePackage": "extracted package name or null",
-    "destinationCountry": "UAE",
-    "visaCategory": "UAE Residency Visa"
-  },
-  "fieldConfidence": {},
-  "missingFields": [],
-  "nextQuestion": null,
-  "leadScore": 60,
-  "scoreComponents": {"intentScore": 15, "completenessScore": 15, "readinessScore": 10, "timelineFitScore": 10, "engagementScore": 10},
-  "leadStatus": "collecting_information",
-  "humanReviewRequired": false,
-  "safetyFlags": []
-}`;
+      const systemPrompt = buildResiderSystemPrompt({
+        lead: existingLeadLink
+          ? {
+              fullName: knownName,
+              phoneOrEmail: knownPhone,
+              serviceVertical: existingLeadLink.service_vertical,
+              residencyIntent: existingLeadLink.residency_intent,
+              workBusinessActivity: knownActivity,
+              uaeLocationContext: existingLeadLink.uae_location_context,
+              targetEmirate: existingLeadLink.target_emirate,
+              timeline: existingLeadLink.timeline,
+              leadStatus: existingLeadLink.lead_status,
+              missingDetails: missingDetailsArray,
+            }
+          : null,
+        customerName: senderName,
+        channel: provider,
+        approvedKnowledge,
+        availableExperts,
+      });
 
       const promptMessages: PromptMessage[] = [
         {
@@ -373,55 +344,85 @@ Reply ONLY with a valid JSON object matching this schema:
           .run();
       }
 
-      // 9. Dispatch outbound reply if replyText is generated and safe
+      // 9. Handover / Takeover check
+      if (qualification.leadStatus === 'handover_requested' || qualification.humanReviewRequired) {
+        await env.DB
+          .prepare('UPDATE conversations SET human_takeover = 1, takeover_at = ?, updated_at = ? WHERE id = ?')
+          .bind(now, now, conversationId)
+          .run();
+        logger.info('Auto-paused AI due to handover_requested or humanReviewRequired', {
+          conversationId,
+          leadStatus: qualification.leadStatus,
+          statusReason: qualification.statusReason,
+        });
+      }
+
+      // 10. Dispatch outbound reply directly (if AUTONOMOUS) or stage as draft for review
       if (qualification.replyText) {
-        const outboundMsgId = crypto.randomUUID();
-        await env.DB
-          .prepare(
-            `INSERT INTO messages (
-              id, tenant_id, conversation_id, direction, sender_type,
-              message_text, message_type, delivery_status, created_at
-            ) VALUES (?, ?, ?, 'outbound', 'ai', ?, 'text', 'pending', ?)`
-          )
-          .bind(outboundMsgId, tenantId, conversationId, qualification.replyText, now)
-          .run();
+        const isAutoDispatch = conversation.ai_mode === 'ON' || (env as any).AUTO_DISPATCH_ALL === 'true';
 
-        // Update conversation last_message_at and last_outbound_at
-        await env.DB
-          .prepare('UPDATE conversations SET last_message_at = ?, last_outbound_at = ?, updated_at = ? WHERE id = ?')
-          .bind(now, now, now, conversationId)
-          .run();
-
-        const connection = await connectionRepository.getByIdDecrypted(
-          env.DB,
-          connectionId,
-          masterKey
-        );
-
-        if (connection && connection.accessToken) {
-          let dispatchedMessageId = `msg_${Date.now()}`;
-
-          if (provider === 'whatsapp') {
-            const sendResult = await whatsappSendApiAdapter.sendMessage({
-              phoneNumberId: connection.phoneNumberId || connection.externalAccountId,
-              accessToken: connection.accessToken,
-              recipientPhone: senderId,
-              text: qualification.replyText,
-            });
-            dispatchedMessageId = sendResult.messageId;
-          } else {
-            const sendResult = await instagramSendApiAdapter.sendMessage({
-              accessToken: connection.accessToken,
-              recipientId: senderId,
-              text: qualification.replyText,
-            });
-            dispatchedMessageId = sendResult.messageId;
-          }
-
+        if (isAutoDispatch) {
+          const outboundMsgId = crypto.randomUUID();
           await env.DB
-            .prepare("UPDATE messages SET provider_message_id = ?, delivery_status = 'delivered' WHERE id = ?")
-            .bind(dispatchedMessageId, outboundMsgId)
+            .prepare(
+              `INSERT INTO messages (
+                id, tenant_id, conversation_id, direction, sender_type,
+                message_text, message_type, delivery_status, created_at
+              ) VALUES (?, ?, ?, 'outbound', 'ai', ?, 'text', 'pending', ?)`
+            )
+            .bind(outboundMsgId, tenantId, conversationId, qualification.replyText, now)
             .run();
+
+          // Update conversation last_message_at and last_outbound_at
+          await env.DB
+            .prepare('UPDATE conversations SET last_message_at = ?, last_outbound_at = ?, updated_at = ? WHERE id = ?')
+            .bind(now, now, now, conversationId)
+            .run();
+
+          const connection = await connectionRepository.getByIdDecrypted(
+            env.DB,
+            connectionId,
+            masterKey
+          );
+
+          if (connection && connection.accessToken) {
+            let dispatchedMessageId = `msg_${Date.now()}`;
+
+            if (provider === 'whatsapp') {
+              const sendResult = await whatsappSendApiAdapter.sendMessage({
+                phoneNumberId: connection.phoneNumberId || connection.externalAccountId,
+                accessToken: connection.accessToken,
+                recipientPhone: senderId,
+                text: qualification.replyText,
+              });
+              dispatchedMessageId = sendResult.messageId;
+            } else {
+              const sendResult = await instagramSendApiAdapter.sendMessage({
+                accessToken: connection.accessToken,
+                recipientId: senderId,
+                text: qualification.replyText,
+              });
+              dispatchedMessageId = sendResult.messageId;
+            }
+
+            await env.DB
+              .prepare("UPDATE messages SET provider_message_id = ?, delivery_status = 'delivered' WHERE id = ?")
+              .bind(dispatchedMessageId, outboundMsgId)
+              .run();
+          }
+        } else {
+          // Staged as draft for staff review (Section 8 & 10)
+          await draftRepository.createDraft(env.DB, tenantId, {
+            conversationId,
+            leadId,
+            suggestedText: qualification.replyText,
+            rationale: qualification.rationale || qualification.statusReason || 'AI generated response awaiting review',
+          });
+          logger.info('Staged AI reply in message_drafts for staff review', {
+            conversationId,
+            leadId,
+            leadStatus: qualification.leadStatus,
+          });
         }
       }
 

@@ -6,9 +6,9 @@ export interface BusinessKnowledgeItem {
   category: KnowledgeCategory;
   title: string;
   content: string;
-  priceAed?: number | null;
+  priceAed?: number | null | undefined;
   isApprovedByClient: boolean;
-  approvalNotes?: string | null;
+  approvalNotes?: string | null | undefined;
   createdAt: number;
   updatedAt: number;
 }
@@ -17,16 +17,16 @@ export interface CreateKnowledgeItemInput {
   category: KnowledgeCategory;
   title: string;
   content: string;
-  priceAed?: number | null;
-  isApprovedByClient?: boolean;
-  approvalNotes?: string | null;
+  priceAed?: number | null | undefined;
+  isApprovedByClient?: boolean | undefined;
+  approvalNotes?: string | null | undefined;
 }
 
 export interface UpdateKnowledgeItemInput {
-  category?: KnowledgeCategory;
-  title?: string;
-  content?: string;
-  priceAed?: number | null;
-  isApprovedByClient?: boolean;
-  approvalNotes?: string | null;
+  category?: KnowledgeCategory | undefined;
+  title?: string | undefined;
+  content?: string | undefined;
+  priceAed?: number | null | undefined;
+  isApprovedByClient?: boolean | undefined;
+  approvalNotes?: string | null | undefined;
 }

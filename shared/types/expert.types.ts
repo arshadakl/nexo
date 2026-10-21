@@ -9,8 +9,8 @@ export interface VerifiedExpert {
   servicesOffered: string[]; // e.g. ["freezone_licence", "mainland", "corporate_tax"]
   isVerified: boolean;
   isAvailable: boolean;
-  contactPhone?: string | null;
-  contactEmail?: string | null;
+  contactPhone?: string | null | undefined;
+  contactEmail?: string | null | undefined;
   createdAt: number;
   updatedAt: number;
 }
@@ -20,30 +20,30 @@ export interface CreateExpertInput {
   organizationName: string;
   sectors: string[];
   languages: string[];
-  emirates?: string[];
-  servicesOffered?: string[];
-  isVerified?: boolean;
-  isAvailable?: boolean;
-  contactPhone?: string | null;
-  contactEmail?: string | null;
+  emirates?: string[] | undefined;
+  servicesOffered?: string[] | undefined;
+  isVerified?: boolean | undefined;
+  isAvailable?: boolean | undefined;
+  contactPhone?: string | null | undefined;
+  contactEmail?: string | null | undefined;
 }
 
 export interface UpdateExpertInput {
-  fullName?: string;
-  organizationName?: string;
-  sectors?: string[];
-  languages?: string[];
-  emirates?: string[];
-  servicesOffered?: string[];
-  isVerified?: boolean;
-  isAvailable?: boolean;
-  contactPhone?: string | null;
-  contactEmail?: string | null;
+  fullName?: string | undefined;
+  organizationName?: string | undefined;
+  sectors?: string[] | undefined;
+  languages?: string[] | undefined;
+  emirates?: string[] | undefined;
+  servicesOffered?: string[] | undefined;
+  isVerified?: boolean | undefined;
+  isAvailable?: boolean | undefined;
+  contactPhone?: string | null | undefined;
+  contactEmail?: string | null | undefined;
 }
 
 export interface ExpertMatchCriteria {
-  sector?: string | null;
-  language?: string | null;
-  emirate?: string | null;
-  serviceNeeded?: string | null;
+  sector?: string | null | undefined;
+  language?: string | null | undefined;
+  emirate?: string | null | undefined;
+  serviceNeeded?: string | null | undefined;
 }
