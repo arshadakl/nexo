@@ -113,10 +113,10 @@ export function OverviewView({ onNavigateTab }: OverviewViewProps = {}) {
               <div>
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <Globe className="w-4 h-4 text-primary" />
-                  Top Visa Destination Countries
+                  Service Demand & Jurisdictions
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Applicant demand breakdown extracted by Nexo AI
+                  Residency vs Business Setup demand extracted by Resider AI
                 </CardDescription>
               </div>
               <Badge variant="outline" className="text-[10px]">
@@ -189,8 +189,8 @@ export function OverviewView({ onNavigateTab }: OverviewViewProps = {}) {
         {/* Lead Conversion Funnel */}
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Qualification Funnel</CardTitle>
-            <CardDescription className="text-xs">Applicant lifecycle progression</CardDescription>
+            <CardTitle className="text-base font-semibold">Resider Lifecycle Funnel</CardTitle>
+            <CardDescription className="text-xs">Customer journey progression from first inquiry to handover</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-xs">
             {isLoading ? (

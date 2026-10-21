@@ -18,8 +18,12 @@ const titles: Record<NavItemKey, { title: string; subtitle: string }> = {
     subtitle: 'Unified Instagram DMs & WhatsApp customer threads with AI co-pilot',
   },
   leads: {
-    title: 'Visa Leads Pipeline',
-    subtitle: 'AI-extracted applicant profiles, commercial readiness, and follow-ups',
+    title: 'Resider Leads Pipeline',
+    subtitle: 'Customer profiles, UAE residency intents, and consulting readiness',
+  },
+  experts: {
+    title: 'Verified Consulting Partners',
+    subtitle: 'Expert directory for sector-specific business setup and mainland referrals',
   },
   'ai-automation': {
     title: 'AI Providers & Automation',

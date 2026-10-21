@@ -11,11 +11,17 @@ import {
   User,
   ShieldAlert,
   Globe,
-  GraduationCap,
   Briefcase,
   MessageSquare,
   RefreshCw,
   Trash2,
+  CheckCircle2,
+  XCircle,
+  Edit3,
+  ShieldCheck,
+  Building2,
+  Phone,
+  FileCheck,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,7 +35,15 @@ import {
   useToggleTakeover,
   useClearConversationHistory,
 } from '@/hooks/useConversations';
-import type { ChannelType } from '@shared/types/crm.types';
+import {
+  useConversationDraft,
+  useApproveDraft,
+  useModifyDraft,
+  useRejectDraft,
+} from '@/hooks/useDrafts';
+import { useLead } from '@/hooks/useLeads';
+import { useExperts, useAssignExpert } from '@/hooks/useExperts';
+import type { ChannelType, LeadStatus } from '@shared/types/crm.types';
 
 function formatRelativeTime(timestamp: number): string {
   const diffSec = Math.floor((Date.now() - timestamp) / 1000);
@@ -39,28 +53,47 @@ function formatRelativeTime(timestamp: number): string {
   return `${Math.floor(diffSec / 86400)}d ago`;
 }
 
-function getScoreBadgeClass(score: number): string {
-  if (score >= 80) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-  if (score >= 50) return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-  return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+function getResiderStatusBadgeClass(status: LeadStatus): string {
+  switch (status) {
+    case 'ready_for_team':
+      return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+    case 'handed_over':
+      return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30';
+    case 'handover_requested':
+      return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+    case 'exploring':
+      return 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+    case 'needs_clarification':
+      return 'bg-purple-500/10 text-purple-400 border-purple-500/30';
+    case 'support_enquiry':
+      return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
+    case 'outside_scope_spam':
+      return 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+    default:
+      return 'bg-muted text-muted-foreground border-border';
+  }
 }
 
-const QUICK_TEMPLATES = [
+function formatStatusName(status: string): string {
+  return status.replace(/_/g, ' ');
+}
+
+const RESIDER_QUICK_TEMPLATES = [
   {
-    label: '🇦🇪 Freelance Visa (AED 7.5k)',
-    text: 'Our Freelance Permit & Residency Visa Program starts from AED 7,500. It includes your freelance permit, establishment card, and residency processing. Would you like me to share the document checklist?',
+    label: '👋 Brief Greeting',
+    text: 'ഹായ്! എന്താണ് അറിയേണ്ടത്? We can help with UAE residency permits and verified business setup.',
   },
   {
-    label: '📜 Long-Term Package (AED 7k–7.5k)',
-    text: 'Our Long-term Residency Package (Permit + Residency) is priced at AED 7,000–7,500 all inclusive. It is ideal for freelancers and digital nomads looking for a seamless UAE setup.',
+    label: '📋 6 Stages of Residency',
+    text: 'Our UAE residency service covers 6 clear stages: 1) Initial check, 2) Entry permit, 3) Status change, 4) Medical fitness test, 5) Emirates ID biometrics, and 6) Visa stamping. Would you like permit + residency or residency only?',
   },
   {
-    label: '💳 Residency Visa (AED 15k–20k)',
-    text: 'Our specialized Residency Visa program (AED 15,000–20,000) is tailored for entrepreneurs and property investors with VIP priority medical and Emirates ID processing.',
+    label: '🤝 Business Setup Expert',
+    text: 'For business setup, our team connects you with verified consulting experts matching your sector and language. May we have your permission to share your details with our expert partner?',
   },
   {
-    label: '📞 Book Dubai Call',
-    text: 'Our senior residency advisor in Dubai can review your profile. What is the best WhatsApp number to connect with you tomorrow?',
+    label: '📞 Schedule Advisory Call',
+    text: 'Our advisory team can discuss your profile in detail. What is the best WhatsApp number or time for a quick 10-minute briefing?',
   },
 ];
 
@@ -73,6 +106,9 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
   const [filterChannel, setFilterChannel] = React.useState<'all' | ChannelType>('all');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [messageInput, setMessageInput] = React.useState('');
+  const [activeDraftId, setActiveDraftId] = React.useState<string | null>(null);
+  const [isEditingDraft, setIsEditingDraft] = React.useState(false);
+  const [selectedExpertToAssign, setSelectedExpertToAssign] = React.useState<string>('');
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
   // Synchronize when initialConversationId is provided from outside
@@ -101,20 +137,51 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
   const { data: activeConvo } = useConversation(selectedConvoId);
   const { data: messages, isLoading: isLoadingMessages } = useConversationMessages(selectedConvoId);
 
+  // Draft review query for the selected conversation
+  const { data: pendingDraft, refetch: refetchDraft } = useConversationDraft(selectedConvoId);
+
+  // Lead dossier query
+  const leadId = activeConvo?.lead?.id || null;
+  const { data: fullLead } = useLead(leadId);
+
+  // Verified Experts query for matching
+  const { data: availableExperts } = useExperts({
+    emirate: fullLead?.targetEmirate || undefined,
+  });
+
   // Mutations
   const sendMessageMutation = useSendMessage(selectedConvoId);
   const toggleTakeoverMutation = useToggleTakeover(selectedConvoId);
   const clearChatMutation = useClearConversationHistory(selectedConvoId);
+  const approveDraftMutation = useApproveDraft();
+  const modifyDraftMutation = useModifyDraft();
+  const rejectDraftMutation = useRejectDraft();
+  const assignExpertMutation = useAssignExpert();
 
   // Auto scroll to bottom of messages
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, pendingDraft]);
 
   const handleSend = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = messageInput.trim();
     if (!trimmed || sendMessageMutation.isPending) return;
+
+    if (isEditingDraft && activeDraftId) {
+      modifyDraftMutation.mutate(
+        { draftId: activeDraftId, modifiedText: trimmed },
+        {
+          onSuccess: () => {
+            setMessageInput('');
+            setIsEditingDraft(false);
+            setActiveDraftId(null);
+            refetchDraft();
+          },
+        }
+      );
+      return;
+    }
 
     sendMessageMutation.mutate(
       { messageText: trimmed },
@@ -143,11 +210,49 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
   const handleClearChat = () => {
     if (!activeConvo) return;
     const confirmed = window.confirm(
-      `Are you sure you want to clear chat history for "${activeConvo.customerName}"?\n\nThis will wipe all existing messages and reset this lead profile. Any future message from this user will start fresh as a new inquiry without past history.`
+      `Are you sure you want to clear chat history for "${activeConvo.customerName}"?\n\nThis will wipe all existing messages and reset this Resider dossier.`
     );
     if (!confirmed) return;
 
     clearChatMutation.mutate();
+  };
+
+  const handleApproveDraft = (draftId: string) => {
+    approveDraftMutation.mutate(draftId, {
+      onSuccess: () => {
+        setIsEditingDraft(false);
+        setActiveDraftId(null);
+        refetchDraft();
+      },
+    });
+  };
+
+  const handleStartEditDraft = (draftId: string, text: string) => {
+    setActiveDraftId(draftId);
+    setIsEditingDraft(true);
+    setMessageInput(text);
+  };
+
+  const handleRejectDraft = (draftId: string) => {
+    rejectDraftMutation.mutate(draftId, {
+      onSuccess: () => {
+        setIsEditingDraft(false);
+        setActiveDraftId(null);
+        refetchDraft();
+      },
+    });
+  };
+
+  const handleAssignExpert = () => {
+    if (!leadId || !selectedExpertToAssign) return;
+    assignExpertMutation.mutate(
+      { leadId, expertId: selectedExpertToAssign },
+      {
+        onSuccess: () => {
+          setSelectedExpertToAssign('');
+        },
+      }
+    );
   };
 
   return (
@@ -163,7 +268,7 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search applicants, handles..."
+              placeholder="Search enquiries, handles..."
               className="pl-9 h-9 text-xs bg-muted/30 focus-visible:ring-1 focus-visible:ring-primary"
             />
           </div>
@@ -225,6 +330,8 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
           ) : conversations && conversations.length > 0 ? (
             conversations.map((convo) => {
               const isSelected = convo.id === selectedConvoId;
+              const leadStatus = convo.lead?.leadStatus as LeadStatus | undefined;
+
               return (
                 <div
                   key={convo.id}
@@ -277,7 +384,7 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
                           className="h-4 px-1.5 text-[9px] bg-primary/10 text-primary border-primary/20 flex items-center gap-0.5"
                         >
                           <Sparkles className="w-2.5 h-2.5" />
-                          AI
+                          AI Mode
                         </Badge>
                       )}
                       {convo.customerHandle && (
@@ -287,13 +394,13 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
                       )}
                     </div>
 
-                    {convo.lead && (
+                    {leadStatus && (
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${getScoreBadgeClass(
-                          convo.lead.leadScore
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium border capitalize ${getResiderStatusBadgeClass(
+                          leadStatus
                         )}`}
                       >
-                        {convo.lead.leadScore} pts
+                        {formatStatusName(leadStatus)}
                       </span>
                     )}
                   </div>
@@ -303,9 +410,9 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
           ) : (
             <div className="p-8 text-center text-muted-foreground space-y-2">
               <MessageSquare className="w-8 h-8 mx-auto opacity-40 mb-2" />
-              <p className="text-xs font-medium">No conversations yet</p>
+              <p className="text-xs font-medium">No enquiries yet</p>
               <p className="text-[11px] opacity-70">
-                Inbound DMs from connected Instagram accounts will appear here automatically.
+                Inbound DMs from Instagram and WhatsApp will appear here automatically.
               </p>
             </div>
           )}
@@ -313,7 +420,7 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
       </div>
 
       {/* =========================================================================
-          CENTER PANE: Message Thread & Composer
+          CENTER PANE: Message Thread, AI Draft Staging Bar & Composer
       ========================================================================== */}
       <div className="flex-1 flex flex-col min-w-0 bg-background/20">
         {selectedConvoId && activeConvo ? (
@@ -379,8 +486,7 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="w-4 h-4 shrink-0 text-amber-400" />
                   <span>
-                    <strong>Human Takeover Active:</strong> AI auto-replies are paused. Your messages
-                    will be sent directly to applicant via Instagram DM.
+                    <strong>Human Takeover Active:</strong> AI auto-replies paused. All replies sent here go directly to the customer.
                   </span>
                 </div>
                 <Button
@@ -417,10 +523,10 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
                         <span className="text-[10px] text-muted-foreground font-medium">
                           {isAI ? (
                             <span className="text-indigo-400 flex items-center gap-1 font-semibold">
-                              <Sparkles className="w-2.5 h-2.5" /> Nexo AI
+                              <Sparkles className="w-2.5 h-2.5" /> Resider AI
                             </span>
                           ) : isStaff ? (
-                            <span className="text-cyan-400 font-semibold">Counselor</span>
+                            <span className="text-cyan-400 font-semibold">Resider Team</span>
                           ) : (
                             activeConvo.customerName
                           )}
@@ -472,19 +578,79 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
                 <div className="h-full flex items-center justify-center text-center p-8 text-muted-foreground">
                   <div>
                     <MessageSquare className="w-8 h-8 mx-auto opacity-30 mb-2" />
-                    <p className="text-xs">No messages in this conversation yet</p>
+                    <p className="text-xs">No messages in this enquiry yet</p>
                   </div>
                 </div>
               )}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Quick Templates Bar */}
+            {/* =========================================================================
+                AI DRAFT REVIEW BAR (Section 10 Operational Guardrail)
+            ========================================================================== */}
+            {pendingDraft && pendingDraft.status === 'pending_review' && (
+              <div className="mx-3 my-2 p-3.5 rounded-xl border border-indigo-500/40 bg-indigo-950/30 backdrop-blur-sm shadow-lg space-y-2.5 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-indigo-300">
+                    <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
+                    <span>AI Suggested Reply (Draft Review Mode)</span>
+                    <Badge variant="outline" className="text-[9px] bg-indigo-500/20 text-indigo-200 border-indigo-400/30">
+                      Pending Approval
+                    </Badge>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    Generated {formatRelativeTime(pendingDraft.createdAt)}
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-background/60 border border-border/80 text-xs text-foreground leading-relaxed whitespace-pre-wrap">
+                  {pendingDraft.suggestedText}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <p className="text-[10px] text-muted-foreground/80 italic">
+                    Review before live dispatch to Meta Send API
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/20 px-2.5 gap-1"
+                      onClick={() => handleRejectDraft(pendingDraft.id)}
+                      disabled={rejectDraftMutation.isPending}
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Reject</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs text-indigo-300 border-indigo-500/40 hover:bg-indigo-950/40 px-2.5 gap-1"
+                      onClick={() => handleStartEditDraft(pendingDraft.id, pendingDraft.suggestedText)}
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 gap-1 shadow-sm"
+                      onClick={() => handleApproveDraft(pendingDraft.id)}
+                      disabled={approveDraftMutation.isPending}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{approveDraftMutation.isPending ? 'Sending...' : 'Approve & Send'}</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Templates Bar (Strictly Resider Aligned) */}
             <div className="px-3 py-1.5 border-t border-border/60 bg-background/60 flex items-center gap-1.5 overflow-x-auto shrink-0">
               <span className="text-[10px] font-medium text-muted-foreground shrink-0 uppercase tracking-wider">
-                Templates:
+                Approved Replies:
               </span>
-              {QUICK_TEMPLATES.map((tmpl) => (
+              {RESIDER_QUICK_TEMPLATES.map((tmpl) => (
                 <button
                   key={tmpl.label}
                   type="button"
@@ -498,6 +664,25 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
 
             {/* Composer */}
             <form onSubmit={handleSend} className="p-3 border-t border-border bg-card/20 shrink-0">
+              {isEditingDraft && (
+                <div className="mb-2 flex items-center justify-between text-[11px] text-indigo-300 bg-indigo-950/20 px-2.5 py-1 rounded border border-indigo-500/30">
+                  <span className="flex items-center gap-1.5">
+                    <Edit3 className="w-3 h-3 text-indigo-400" />
+                    Editing staged draft — sending will mark draft as modified & dispatched
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingDraft(false);
+                      setActiveDraftId(null);
+                      setMessageInput('');
+                    }}
+                    className="text-muted-foreground hover:text-foreground underline ml-2"
+                  >
+                    Cancel Edit
+                  </button>
+                </div>
+              )}
               <div className="relative">
                 <textarea
                   value={messageInput}
@@ -511,11 +696,15 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
                   <Button
                     type="submit"
                     size="sm"
-                    disabled={!messageInput.trim() || sendMessageMutation.isPending}
+                    disabled={
+                      !messageInput.trim() ||
+                      sendMessageMutation.isPending ||
+                      modifyDraftMutation.isPending
+                    }
                     className="h-7 px-3 text-xs gap-1"
                   >
                     <Send className="w-3 h-3" />
-                    <span>Send</span>
+                    <span>{isEditingDraft ? 'Save & Send' : 'Send'}</span>
                   </Button>
                 </div>
               </div>
@@ -525,9 +714,9 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
           <div className="h-full flex items-center justify-center text-muted-foreground">
             <div className="text-center space-y-2">
               <MessageSquare className="w-12 h-12 mx-auto opacity-30" />
-              <p className="text-sm font-medium">Select a conversation</p>
+              <p className="text-sm font-medium">Select an enquiry</p>
               <p className="text-xs opacity-70">
-                Choose an applicant from the left to view messages and qualification details.
+                Choose a customer from the left to view messages and Resider lead qualification.
               </p>
             </div>
           </div>
@@ -535,119 +724,231 @@ export function InboxView({ initialConversationId }: InboxViewProps = {}) {
       </div>
 
       {/* =========================================================================
-          RIGHT PANE: Lead Dossier Context
+          RIGHT PANE: Lead Dossier & Evidence Inspector
       ========================================================================== */}
       {selectedConvoId && activeConvo && (
-        <div className="w-72 lg:w-80 border-l border-border bg-background/50 flex flex-col shrink-0 p-4 overflow-y-auto space-y-5">
+        <div className="w-80 lg:w-96 border-l border-border bg-background/50 flex flex-col shrink-0 p-4 overflow-y-auto space-y-4">
           <div className="flex items-center justify-between border-b border-border/70 pb-3">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-primary" />
-              Applicant Profile
+              Resider Dossier
             </h4>
-            {activeConvo.lead && (
+            {fullLead && (
               <span
-                className={`px-2 py-0.5 rounded text-xs font-mono font-bold border ${getScoreBadgeClass(
-                  activeConvo.lead.leadScore
+                className={`px-2 py-0.5 rounded text-[11px] font-medium border capitalize ${getResiderStatusBadgeClass(
+                  fullLead.leadStatus
                 )}`}
               >
-                {activeConvo.lead.leadScore}/100
+                {formatStatusName(fullLead.leadStatus)}
               </span>
             )}
           </div>
 
-          {activeConvo.lead ? (
+          {fullLead ? (
             <div className="space-y-4">
-              {/* UAE Program, Phone & Lifestyle Sport */}
-              <div className="space-y-2">
-                <div className="flex items-start gap-2 text-xs">
-                  <Globe className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-[10px] text-muted-foreground block">Destination & Program</span>
-                    <span className="font-medium text-foreground">
-                      {activeConvo.lead.servicePackage || 'UAE Residency'}
-                    </span>
-                  </div>
+              {/* Status Reason Audit Callout */}
+              {fullLead.statusReason && (
+                <div className="p-2.5 rounded-lg bg-secondary/40 border border-border/60 text-xs space-y-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block flex items-center gap-1">
+                    <FileCheck className="w-3 h-3 text-primary" />
+                    Status Rationale
+                  </span>
+                  <p className="text-muted-foreground leading-relaxed">{fullLead.statusReason}</p>
                 </div>
+              )}
 
-                <div className="flex items-start gap-2 text-xs">
-                  <GraduationCap className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-[10px] text-muted-foreground block">Phone Number</span>
-                    <span className="font-medium text-foreground font-mono">
-                      {activeConvo.lead.phoneNumber || '⏳ Pending'}
+              {/* Fact Matrix */}
+              <div className="border border-border/70 rounded-lg p-3 bg-muted/20 space-y-2.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                  UAE Qualification Profile
+                </span>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <Briefcase className="w-3.5 h-3.5 text-primary" />
+                      Vertical:
                     </span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2 text-xs">
-                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-[10px] text-muted-foreground block">Favorite Sport / Hobby</span>
-                    <span className="font-medium text-foreground">
-                      {activeConvo.lead.favoriteSport || '⏳ Pending'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2 text-xs">
-                  <Briefcase className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-[10px] text-muted-foreground block">Lead Stage</span>
-                    <Badge variant="outline" className="text-[10px] mt-0.5 capitalize">
-                      {activeConvo.lead.leadStatus.replace(/_/g, ' ')}
+                    <Badge variant="outline" className="text-[10px] capitalize">
+                      {fullLead.serviceVertical.replace(/_/g, ' ')}
                     </Badge>
                   </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                      Residency Intent:
+                    </span>
+                    <span className="font-medium text-foreground text-right text-[11px] capitalize">
+                      {fullLead.residencyIntent ? fullLead.residencyIntent.replace(/_/g, ' ') : '—'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                      Activity / Sector:
+                    </span>
+                    <span className="font-medium text-foreground truncate max-w-[140px] text-right">
+                      {fullLead.workBusinessActivity || '⏳ Pending'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Location Context:</span>
+                    <span className="font-medium text-foreground capitalize">
+                      {fullLead.uaeLocationContext.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Target Emirate:</span>
+                    <span className="font-medium text-foreground">
+                      {fullLead.targetEmirate || 'Undecided'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Language:</span>
+                    <span className="font-medium text-foreground capitalize">
+                      {fullLead.detectedLanguage}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                      Contact:
+                    </span>
+                    <span className="font-medium text-foreground font-mono">
+                      {fullLead.phoneOrEmail || fullLead.phoneNumber || '⏳ Pending'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Information Completeness Checklist */}
+              {/* Handover & Privacy Guardrails (Section 3) */}
               <div className="border border-border/70 rounded-lg p-3 bg-muted/20 space-y-2">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                  UAE Qualification Checklist
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  Consent & Permissions
                 </span>
+
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Full Name:</span>
-                    <span className="font-medium">
-                      {activeConvo.lead.fullName && activeConvo.lead.fullName !== 'Applicant' && activeConvo.lead.fullName !== 'Instagram User'
-                        ? `✅ ${activeConvo.lead.fullName}`
-                        : '⏳ Pending'}
+                    <span className="text-muted-foreground">Contact Permission:</span>
+                    <span className="font-medium text-[11px]">
+                      {fullLead.contactPermission ? (
+                        <span className="text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Granted
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/70">⏳ Pending</span>
+                      )}
                     </span>
                   </div>
+
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Program Selected:</span>
-                    <span className="font-medium">
-                      {activeConvo.lead.servicePackage ? '✅ Identified' : '⏳ Pending'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">WhatsApp / Phone:</span>
-                    <span className="font-medium font-mono">
-                      {activeConvo.lead.phoneNumber ? '✅ Captured' : '⏳ Pending'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Favorite Sport:</span>
-                    <span className="font-medium">
-                      {activeConvo.lead.favoriteSport ? `✅ ${activeConvo.lead.favoriteSport}` : '⏳ Pending'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between pt-1 border-t border-border/50">
-                    <span className="text-muted-foreground">Lead Score:</span>
-                    <span className="font-medium font-mono">
-                      {activeConvo.lead.leadScore >= 70 ? '🟢 Hot Lead' : '🟡 In Review'}
+                    <span className="text-muted-foreground">Expert Sharing:</span>
+                    <span className="font-medium text-[11px]">
+                      {fullLead.externalSharingPermission ? (
+                        <span className="text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Permitted
+                        </span>
+                      ) : (
+                        <span className="text-amber-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Gate Required
+                        </span>
+                      )}
                     </span>
                   </div>
                 </div>
               </div>
+
+              {/* Missing Details Checklist */}
+              <div className="border border-border/70 rounded-lg p-3 bg-muted/20 space-y-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                  Missing Details Checklist
+                </span>
+                {fullLead.missingDetails && fullLead.missingDetails.length > 0 ? (
+                  <div className="space-y-1 text-xs">
+                    {fullLead.missingDetails.map((item) => (
+                      <div key={item} className="flex items-center gap-1.5 text-amber-400/90">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
+                        <span className="capitalize">{item.replace(/_/g, ' ')}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>All critical qualification details captured!</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Verified Expert Assignment Card */}
+              {(fullLead.serviceVertical === 'business_setup' ||
+                fullLead.serviceVertical === 'both' ||
+                fullLead.assignedExpertId) && (
+                <div className="border border-primary/30 rounded-lg p-3 bg-primary/5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-primary block flex items-center gap-1">
+                      <Briefcase className="w-3 h-3" />
+                      Verified Expert
+                    </span>
+                    {fullLead.assignedExpertId && (
+                      <Badge variant="outline" className="text-[9px] text-emerald-400 border-emerald-500/30">
+                        Assigned
+                      </Badge>
+                    )}
+                  </div>
+
+                  {fullLead.assignedExpertId ? (
+                    <div className="text-xs space-y-1">
+                      <p className="font-semibold text-foreground">Partner Assigned</p>
+                      <p className="text-muted-foreground text-[11px]">
+                        Lead handed over to verified business setup partner.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-muted-foreground">
+                        Match this customer with a verified consulting partner:
+                      </p>
+                      <div className="flex gap-1.5">
+                        <select
+                          value={selectedExpertToAssign}
+                          onChange={(e) => setSelectedExpertToAssign(e.target.value)}
+                          className="flex-1 h-7 rounded border border-border bg-card px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                          <option value="">Select verified expert...</option>
+                          {(availableExperts || []).map((exp) => (
+                            <option key={exp.id} value={exp.id}>
+                              {exp.fullName} ({exp.organizationName})
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          size="sm"
+                          disabled={!selectedExpertToAssign || assignExpertMutation.isPending}
+                          onClick={handleAssignExpert}
+                          className="h-7 text-xs px-2.5"
+                        >
+                          Assign
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="p-4 rounded-lg border border-dashed border-border text-center space-y-2">
               <Sparkles className="w-5 h-5 mx-auto text-primary opacity-50" />
-              <p className="text-xs font-medium">AI Collecting Details</p>
+              <p className="text-xs font-medium">Resider AI Profiling Active</p>
               <p className="text-[11px] text-muted-foreground">
-                As the applicant converses, Nexo AI will extract destination country, visa category,
-                and score this profile automatically.
+                As the customer chats, Resider AI automatically identifies residency intent, business activity, and missing details.
               </p>
             </div>
           )}

@@ -6,6 +6,7 @@ import {
   Zap,
   Settings,
   Sparkles,
+  UserCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +15,7 @@ export type NavItemKey =
   | 'overview'
   | 'inbox'
   | 'leads'
+  | 'experts'
   | 'ai-automation'
   | 'integrations'
   | 'settings';
@@ -34,6 +36,7 @@ export function Sidebar({ currentTab, onTabChange, unreadCount = 0 }: SidebarPro
       badge: unreadCount > 0 ? String(unreadCount) : undefined,
     },
     { key: 'leads' as const, label: 'Leads Pipeline', icon: Users },
+    { key: 'experts' as const, label: 'Verified Experts', icon: UserCheck },
     {
       key: 'ai-automation' as const,
       label: 'AI Automation',
@@ -54,12 +57,12 @@ export function Sidebar({ currentTab, onTabChange, unreadCount = 0 }: SidebarPro
           </div>
           <div>
             <div className="font-bold text-base tracking-tight text-foreground flex items-center gap-1.5">
-              Nexo
+              Resider
               <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-                Edge
+                Concierge
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">Visa CRM & Automation</p>
+            <p className="text-xs text-muted-foreground">UAE Residency & Setup</p>
           </div>
         </div>
 
@@ -122,10 +125,10 @@ export function Sidebar({ currentTab, onTabChange, unreadCount = 0 }: SidebarPro
       <div className="p-4 border-t border-border/80 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground border border-border">
-            VC
+            RA
           </div>
           <div className="truncate">
-            <p className="text-xs font-medium text-foreground truncate">Visa Horizon</p>
+            <p className="text-xs font-medium text-foreground truncate">Resider Advisory</p>
             <p className="text-[10px] text-muted-foreground">Admin Workspace</p>
           </div>
         </div>

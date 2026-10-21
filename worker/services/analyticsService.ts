@@ -25,17 +25,18 @@ export class AnalyticsService {
     const totalConvos = Number(convoStats?.total_convos || 0);
     const takeoverConvos = Number(convoStats?.takeover_convos || 0);
 
-    // 2. Lead Status Breakdown
+    // 2. Lead Status Breakdown (Resider Canonical)
     const leadStats = await db
       .prepare(
         `SELECT 
           COUNT(*) as total_leads,
-          SUM(CASE WHEN lead_status IN ('qualified', 'consultation_booked', 'converted') THEN 1 ELSE 0 END) as qualified_leads,
-          SUM(CASE WHEN lead_status = 'needs_human_review' THEN 1 ELSE 0 END) as review_leads,
-          SUM(CASE WHEN lead_status = 'new' THEN 1 ELSE 0 END) as new_leads,
-          SUM(CASE WHEN lead_status = 'collecting_information' THEN 1 ELSE 0 END) as collecting_leads,
-          SUM(CASE WHEN lead_status = 'consultation_booked' THEN 1 ELSE 0 END) as booked_leads,
-          SUM(CASE WHEN lead_status = 'converted' THEN 1 ELSE 0 END) as converted_leads
+          SUM(CASE WHEN status IN ('ready_for_team', 'handed_over') THEN 1 ELSE 0 END) as qualified_leads,
+          SUM(CASE WHEN status IN ('handover_requested', 'needs_clarification') THEN 1 ELSE 0 END) as review_leads,
+          SUM(CASE WHEN status = 'needs_clarification' THEN 1 ELSE 0 END) as clarification_leads,
+          SUM(CASE WHEN status = 'exploring' THEN 1 ELSE 0 END) as exploring_leads,
+          SUM(CASE WHEN status = 'ready_for_team' THEN 1 ELSE 0 END) as ready_leads,
+          SUM(CASE WHEN status = 'handed_over' THEN 1 ELSE 0 END) as handed_over_leads,
+          SUM(CASE WHEN status = 'support_enquiry' THEN 1 ELSE 0 END) as support_leads
         FROM leads
         WHERE tenant_id = ?`
       )
@@ -56,24 +57,29 @@ export class AnalyticsService {
 
     const aiAutoReplies = Number(aiMessageStats?.ai_count || 0);
 
-    // 4. Destination Country Distribution (Top 5)
-    const countryRows = await db
+    // 4. Service Demand Breakdown (Residency vs Business Setup vs Emirate)
+    const serviceRows = await db
       .prepare(
-        `SELECT destination_country, COUNT(*) as cnt
+        `SELECT COALESCE(target_emirate, service_vertical, 'UAE Residency') as category, COUNT(*) as cnt
          FROM leads
-         WHERE tenant_id = ? AND destination_country IS NOT NULL AND destination_country != ''
-         GROUP BY destination_country
+         WHERE tenant_id = ?
+         GROUP BY category
          ORDER BY cnt DESC
          LIMIT 5`
       )
       .bind(tenantId)
       .all<any>();
 
-    const countryDistribution = (countryRows.results || []).map((row) => {
+    const countryDistribution = (serviceRows.results || []).map((row) => {
       const count = Number(row.cnt);
       const percentage = totalLeads > 0 ? Math.round((count / totalLeads) * 100) : 0;
+      let label = row.category;
+      if (label === 'residency') label = 'UAE Residency';
+      if (label === 'business_setup') label = 'Business Setup';
+      if (label === 'both') label = 'Residency + Business Setup';
+      if (label === 'unspecified') label = 'General UAE Inquiry';
       return {
-        country: row.destination_country,
+        country: label,
         leadCount: count,
         percentage,
       };
@@ -106,19 +112,19 @@ export class AnalyticsService {
       },
     ];
 
-    // 6. Conversion Funnel
+    // 6. Conversion Funnel (Resider Lifecycle Progression)
     const conversionFunnel = [
       { stage: 'Inbound Inquiries', count: totalConvos },
-      { stage: 'Collecting Details', count: Number(leadStats?.collecting_leads || 0) + Number(leadStats?.new_leads || 0) },
-      { stage: 'Qualified Hot Leads', count: qualifiedLeads },
-      { stage: 'Consultation Booked', count: Number(leadStats?.booked_leads || 0) },
-      { stage: 'Clients Converted', count: Number(leadStats?.converted_leads || 0) },
+      { stage: 'Needs Clarification', count: Number(leadStats?.clarification_leads || 0) },
+      { stage: 'Exploring Options', count: Number(leadStats?.exploring_leads || 0) },
+      { stage: 'Ready for Team', count: Number(leadStats?.ready_leads || 0) },
+      { stage: 'Handed Over / Expert Matched', count: Number(leadStats?.handed_over_leads || 0) },
     ];
 
     // 7. Recent Activity Timeline
     const recentLeads = await db
       .prepare(
-        `SELECT id, full_name, destination_country, lead_score, updated_at
+        `SELECT id, full_name, service_vertical, status, updated_at
          FROM leads
          WHERE tenant_id = ?
          ORDER BY updated_at DESC
@@ -129,9 +135,11 @@ export class AnalyticsService {
 
     const recentActivity = (recentLeads.results || []).map((l) => ({
       id: l.id,
-      type: l.lead_score >= 80 ? ('qualified' as const) : ('new_lead' as const),
-      title: `${l.full_name || 'Applicant'} (${l.lead_score} pts)`,
-      description: `Inquired about ${l.destination_country || 'Visa Consultation'}`,
+      type: (l.status === 'ready_for_team' || l.status === 'handed_over')
+        ? ('qualified' as const)
+        : ('new_lead' as const),
+      title: `${l.full_name || 'Customer'} (${String(l.status || '').replace(/_/g, ' ')})`,
+      description: `Inquired about ${l.service_vertical === 'business_setup' ? 'UAE Business Setup' : l.service_vertical === 'both' ? 'Residency & Setup' : 'UAE Residency'}`,
       timestamp: Number(l.updated_at),
     }));
 

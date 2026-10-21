@@ -11,20 +11,16 @@ import type { UpdateLeadSchemaType, CreateLeadSchemaType } from '@shared/schemas
 
 export interface UseLeadsFilters {
   status?: LeadStatus | undefined;
-  destinationCountry?: string | undefined;
+  serviceVertical?: string | undefined;
   search?: string | undefined;
-  minScore?: number | undefined;
-  maxScore?: number | undefined;
-  sortBy?: ('score' | 'recent') | undefined;
+  sortBy?: ('recent' | 'status') | undefined;
 }
 
 export function useLeads(filters: UseLeadsFilters = {}) {
   const queryParams = new URLSearchParams();
   if (filters.status) queryParams.set('status', filters.status);
-  if (filters.destinationCountry) queryParams.set('country', filters.destinationCountry);
+  if (filters.serviceVertical) queryParams.set('vertical', filters.serviceVertical);
   if (filters.search) queryParams.set('search', filters.search);
-  if (filters.minScore !== undefined) queryParams.set('minScore', String(filters.minScore));
-  if (filters.maxScore !== undefined) queryParams.set('maxScore', String(filters.maxScore));
   if (filters.sortBy) queryParams.set('sortBy', filters.sortBy);
 
   const queryString = queryParams.toString();

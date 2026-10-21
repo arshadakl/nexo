@@ -3,12 +3,12 @@ import {
   ArrowUpDown,
   ChevronRight,
   Search,
-  Globe,
-  Sparkles,
+  Briefcase,
   RefreshCw,
+  Building2,
+  CheckCircle2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,24 +24,24 @@ function formatRelativeTime(timestamp: number): string {
   return `${Math.floor(diffSec / 86400)}d ago`;
 }
 
-function getScoreBadgeClass(score: number): string {
-  if (score >= 80) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-  if (score >= 50) return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-  return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
-}
-
-function getStatusBadgeVariant(status: LeadStatus) {
+function getResiderStatusBadgeClass(status: LeadStatus): string {
   switch (status) {
-    case 'qualified':
-    case 'converted':
-      return 'success';
-    case 'needs_human_review':
-      return 'warning';
-    case 'unqualified':
-    case 'closed_lost':
-      return 'destructive';
+    case 'ready_for_team':
+      return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+    case 'handed_over':
+      return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30';
+    case 'handover_requested':
+      return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+    case 'exploring':
+      return 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+    case 'needs_clarification':
+      return 'bg-purple-500/10 text-purple-400 border-purple-500/30';
+    case 'support_enquiry':
+      return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
+    case 'outside_scope_spam':
+      return 'bg-slate-500/10 text-slate-400 border-slate-500/30';
     default:
-      return 'secondary';
+      return 'bg-muted text-muted-foreground border-border';
   }
 }
 
@@ -52,9 +52,9 @@ interface LeadsViewProps {
 export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
   const [selectedLeadId, setSelectedLeadId] = React.useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = React.useState<LeadStatus | 'all'>('all');
-  const [destinationCountry, setDestinationCountry] = React.useState<string>('all');
+  const [serviceVertical, setServiceVertical] = React.useState<string>('all');
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [sortBy, setSortBy] = React.useState<'score' | 'recent'>('score');
+  const [sortBy, setSortBy] = React.useState<'recent' | 'status'>('recent');
 
   const {
     data: leads,
@@ -62,13 +62,13 @@ export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
     refetch,
   } = useLeads({
     status: selectedStatus === 'all' ? undefined : selectedStatus,
-    destinationCountry: destinationCountry === 'all' ? undefined : destinationCountry,
+    serviceVertical: serviceVertical === 'all' ? undefined : serviceVertical,
     search: searchQuery || undefined,
     sortBy,
   });
 
   const toggleSort = () => {
-    setSortBy((prev) => (prev === 'score' ? 'recent' : 'score'));
+    setSortBy((prev) => (prev === 'recent' ? 'status' : 'recent'));
   };
 
   return (
@@ -82,42 +82,41 @@ export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search leads, countries..."
+              placeholder="Search enquiries, activities..."
               className="pl-8 h-8 text-xs bg-card"
             />
           </div>
 
-          {/* Status Filter */}
+          {/* Canonical Resider Status Filter */}
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value as any)}
             className="h-8 rounded-md border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           >
-            <option value="all">All Stages</option>
-            <option value="new">New Inquiry</option>
-            <option value="collecting_information">Collecting Details</option>
-            <option value="qualified">Qualified Hot Lead</option>
-            <option value="consultation_booked">Consultation Booked</option>
-            <option value="converted">Client Converted</option>
-            <option value="needs_human_review">Needs Review</option>
-            <option value="unqualified">Unqualified</option>
+            <option value="all">All Statuses</option>
+            <option value="ready_for_team">Ready for Team</option>
+            <option value="handover_requested">Handover Requested</option>
+            <option value="handed_over">Handed Over</option>
+            <option value="exploring">Exploring Options</option>
+            <option value="needs_clarification">Needs Clarification</option>
+            <option value="support_enquiry">Support Enquiry</option>
+            <option value="outside_scope_spam">Outside Scope / Spam</option>
           </select>
 
-          {/* Country Filter */}
+          {/* Service Vertical Filter */}
           <select
-            value={destinationCountry}
-            onChange={(e) => setDestinationCountry(e.target.value)}
+            value={serviceVertical}
+            onChange={(e) => setServiceVertical(e.target.value)}
             className="h-8 rounded-md border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           >
-            <option value="all">All Destinations</option>
-            <option value="Germany">Germany</option>
-            <option value="Canada">Canada</option>
-            <option value="UK">United Kingdom</option>
-            <option value="Australia">Australia</option>
-            <option value="USA">United States</option>
+            <option value="all">All Verticals</option>
+            <option value="residency">UAE Residency</option>
+            <option value="business_setup">Business Setup</option>
+            <option value="both">Residency + Setup</option>
+            <option value="unspecified">Unspecified</option>
           </select>
 
-          {/* Sort By Score Toggle */}
+          {/* Sort By Toggle */}
           <Button
             size="sm"
             variant="outline"
@@ -125,7 +124,7 @@ export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
             onClick={toggleSort}
           >
             <ArrowUpDown className="w-3.5 h-3.5" />
-            <span>Sort: {sortBy === 'score' ? 'Top Score' : 'Most Recent'}</span>
+            <span>Sort: {sortBy === 'recent' ? 'Most Recent' : 'By Status'}</span>
           </Button>
         </div>
 
@@ -151,11 +150,11 @@ export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
           <table className="w-full text-left text-xs">
             <thead className="bg-secondary/40 border-b border-border text-muted-foreground uppercase text-[10px] tracking-wider">
               <tr>
-                <th className="px-6 py-3 font-semibold">Applicant</th>
-                <th className="px-6 py-3 font-semibold">Destination & Category</th>
-                <th className="px-6 py-3 font-semibold">Commercial Score</th>
-                <th className="px-6 py-3 font-semibold">Pipeline Stage</th>
-                <th className="px-6 py-3 font-semibold">Budget & Timeline</th>
+                <th className="px-6 py-3 font-semibold">Customer</th>
+                <th className="px-6 py-3 font-semibold">Vertical & Intent</th>
+                <th className="px-6 py-3 font-semibold">Activity & Location</th>
+                <th className="px-6 py-3 font-semibold">Resider Status</th>
+                <th className="px-6 py-3 font-semibold">Missing Details</th>
                 <th className="px-6 py-3 font-semibold">Last Active</th>
                 <th className="px-6 py-3 font-semibold text-right">Action</th>
               </tr>
@@ -171,7 +170,7 @@ export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
                       <Skeleton className="h-4 w-28" />
                     </td>
                     <td className="px-6 py-4">
-                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-4 w-24" />
                     </td>
                     <td className="px-6 py-4">
                       <Skeleton className="h-4 w-24" />
@@ -196,61 +195,89 @@ export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
                   >
                     <td className="px-6 py-4">
                       <div className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                        {lead.fullName || 'Anonymous Applicant'}
+                        {lead.fullName || 'Anonymous Customer'}
                       </div>
-                      {lead.phoneOrEmail && (
-                        <div className="text-[10px] text-muted-foreground">{lead.phoneOrEmail}</div>
+                      {(lead.phoneOrEmail || lead.phoneNumber) && (
+                        <div className="text-[10px] text-muted-foreground font-mono">
+                          {lead.phoneOrEmail || lead.phoneNumber}
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="font-medium text-foreground flex items-center gap-1.5">
-                        <Globe className="w-3.5 h-3.5 text-primary/80" />
-                        <span>{lead.destinationCountry || 'Not Specified'}</span>
+                      <div className="font-medium text-foreground flex items-center gap-1.5 capitalize">
+                        <Briefcase className="w-3.5 h-3.5 text-primary/80" />
+                        <span>{lead.serviceVertical.replace(/_/g, ' ')}</span>
                       </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {lead.visaCategory || 'Consultation Inquiry'}
+                      <div className="text-[10px] text-muted-foreground capitalize">
+                        {lead.residencyIntent ? lead.residencyIntent.replace(/_/g, ' ') : '—'}
                       </div>
                     </td>
-                    <td className="px-6 py-4 font-mono font-semibold">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-foreground flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{lead.workBusinessActivity || 'Pending'}</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground capitalize">
+                        {lead.targetEmirate || lead.uaeLocationContext.replace(/_/g, ' ')}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
                       <span
-                        className={`px-2 py-0.5 rounded text-[11px] border ${getScoreBadgeClass(
-                          lead.leadScore
+                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium border capitalize ${getResiderStatusBadgeClass(
+                          lead.leadStatus
                         )}`}
                       >
-                        {lead.leadScore} / 100
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge
-                        variant={getStatusBadgeVariant(lead.leadStatus) as any}
-                        className="text-[10px] capitalize"
-                      >
                         {lead.leadStatus.replace(/_/g, ' ')}
-                      </Badge>
+                      </span>
+                      {lead.statusReason && (
+                        <div className="text-[10px] text-muted-foreground truncate max-w-[160px] mt-0.5" title={lead.statusReason}>
+                          {lead.statusReason}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-foreground">{lead.budgetRange || '—'}</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {lead.timeline || '—'}
-                      </div>
+                      {lead.missingDetails && lead.missingDetails.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 max-w-[150px]">
+                          {lead.missingDetails.slice(0, 2).map((item) => (
+                            <span
+                              key={item}
+                              className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 capitalize"
+                            >
+                              {item.replace(/_/g, ' ')}
+                            </span>
+                          ))}
+                          {lead.missingDetails.length > 2 && (
+                            <span className="text-[9px] text-muted-foreground">
+                              +{lead.missingDetails.length - 2} more
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Complete
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {formatRelativeTime(lead.updatedAt)}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 group-hover:bg-primary/10">
-                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <ChevronRight className="w-4 h-4" />
                       </Button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
-                    <Sparkles className="w-8 h-8 mx-auto opacity-30 mb-2" />
-                    <p className="text-xs font-medium">No leads found</p>
-                    <p className="text-[11px] opacity-70">
-                      As inbound conversations are qualified by Nexo AI, leads will populate here with scores.
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    <p className="font-medium text-xs">No leads found matching your criteria</p>
+                    <p className="text-[11px] opacity-70 mt-1">
+                      As inbound customer conversations occur, Resider AI automatically qualifies and lists profiles here.
                     </p>
                   </td>
                 </tr>
@@ -260,14 +287,12 @@ export function LeadsView({ onNavigateToInbox }: LeadsViewProps = {}) {
         </div>
       </Card>
 
-      {/* Slide-over Lead Detail Drawer */}
-      {selectedLeadId && (
-        <LeadDrawer
-          leadId={selectedLeadId}
-          onClose={() => setSelectedLeadId(null)}
-          onNavigateToInbox={onNavigateToInbox}
-        />
-      )}
+      {/* Slide-out Lead Drawer */}
+      <LeadDrawer
+        leadId={selectedLeadId}
+        onClose={() => setSelectedLeadId(null)}
+        onNavigateToInbox={onNavigateToInbox}
+      />
     </div>
   );
 }

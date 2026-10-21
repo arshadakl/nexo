@@ -6,6 +6,7 @@ import type { NavItemKey } from './components/layout/Sidebar';
 import { OverviewView } from './views/OverviewView';
 import { InboxView } from './views/InboxView';
 import { LeadsView } from './views/LeadsView';
+import { ExpertsView } from './views/ExpertsView';
 import { AIAutomationView } from './views/AIAutomationView';
 import { IntegrationsView } from './views/IntegrationsView';
 import { SettingsView } from './views/SettingsView';
@@ -42,6 +43,8 @@ function Dashboard() {
         return <InboxView initialConversationId={inboxConversationId} />;
       case 'leads':
         return <LeadsView onNavigateToInbox={handleNavigateToInbox} />;
+      case 'experts':
+        return <ExpertsView />;
       case 'ai-automation':
         return <AIAutomationView />;
       case 'integrations':
