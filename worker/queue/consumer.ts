@@ -99,7 +99,7 @@ export async function processQueueBatch(
               id, tenant_id, connection_id, channel, provider_convo_id,
               customer_id, customer_name, ai_mode, human_takeover,
               unread_count, last_message_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'INHERIT', 0, 1, ?, ?, ?)`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ON', 0, 1, ?, ?, ?)`
           )
           .bind(
             conversationId,
@@ -114,7 +114,7 @@ export async function processQueueBatch(
             now
           )
           .run();
-        conversation = { id: conversationId, ai_mode: 'INHERIT', human_takeover: 0, unread_count: 1 };
+        conversation = { id: conversationId, ai_mode: 'ON', human_takeover: 0, unread_count: 1 };
       } else {
         conversationId = conversation.id;
         await env.DB
@@ -357,9 +357,11 @@ export async function processQueueBatch(
         });
       }
 
-      // 10. Dispatch outbound reply directly (if AUTONOMOUS) or stage as draft for review
+      // 10. Dispatch outbound reply directly (Instant Auto-Reply active by default)
       if (qualification.replyText) {
-        const isAutoDispatch = conversation.ai_mode === 'ON' || (env as any).AUTO_DISPATCH_ALL === 'true';
+        const isAutoDispatch =
+          (conversation.ai_mode as string) !== 'DRAFT_REVIEW' &&
+          (conversation.ai_mode as string) !== 'OFF';
 
         if (isAutoDispatch) {
           const outboundMsgId = crypto.randomUUID();
