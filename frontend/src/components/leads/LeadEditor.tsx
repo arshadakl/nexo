@@ -5,7 +5,7 @@ import { useUpdateLead } from '@/hooks/useLeads';
 import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/button';
 import { CheckField, Field, SelectField, TextField } from '@/components/ui/Field';
-import { humanize, leadLabels } from '@/lib/leadPresentation';
+import { humanize, leadLabels, qualificationLabels } from '@/lib/leadPresentation';
 
 export function LeadEditor({ lead, onClose }: { lead: Lead; onClose: () => void }) {
   const mutation = useUpdateLead(lead.id);
@@ -29,14 +29,23 @@ export function LeadEditor({ lead, onClose }: { lead: Lead; onClose: () => void 
             <Field label="Profession / Job" value={values.profession || values.workBusinessActivity || ''} onChange={(event) => { change('profession', event.target.value); change('workBusinessActivity', event.target.value); }} />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Current country / location" value={values.currentLocation || ''} onChange={(event) => change('currentLocation', event.target.value)} />
             <Field label="Nationality" value={values.nationality || ''} onChange={(event) => change('nationality', event.target.value)} />
+            <Field label="Current country" value={values.currentCountry || ''} onChange={(event) => change('currentCountry', event.target.value)} />
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Current city / emirate" value={values.currentCity || ''} onChange={(event) => change('currentCity', event.target.value)} />
+            <Field label="Visa status" value={values.visaStatus || ''} onChange={(event) => change('visaStatus', event.target.value)} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectField label="Lead qualification" value={values.qualification || 'unknown'} onChange={(event) => change('qualification', event.target.value as NonNullable<Lead['qualification']>)}>{Object.entries(qualificationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
+            <Field label="Qualification reason" value={values.qualificationReason || ''} onChange={(event) => change('qualificationReason', event.target.value)} />
+          </div>
+          <p className="text-xs leading-5 text-content-secondary">Fields you save here are marked confirmed; the AI will not overwrite them.</p>
           <TextField label="Customer summary" value={values.summary || ''} onChange={(event) => change('summary', event.target.value)} />
           <SelectField label="Lead status" value={values.leadStatus} onChange={(event) => change('leadStatus', event.target.value as Lead['leadStatus'])}>{Object.entries(leadLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
           <Field label="Status reason" value={values.statusReason || ''} onChange={(event) => change('statusReason', event.target.value)} />
           <div className="grid gap-4 sm:grid-cols-2"><SelectField label="Service" value={values.serviceVertical} onChange={(event) => change('serviceVertical', event.target.value as Lead['serviceVertical'])}>{['residency', 'business_setup', 'both', 'unspecified'].map((value) => <option key={value} value={value}>{humanize(value)}</option>)}</SelectField><SelectField label="Residency intent" value={values.residencyIntent} onChange={(event) => change('residencyIntent', event.target.value as Lead['residencyIntent'])}>{['permit_with_residency', 'residency_only', 'understanding_options', 'unspecified'].map((value) => <option key={value} value={value}>{humanize(value)}</option>)}</SelectField></div>
-          <div className="grid gap-4 sm:grid-cols-2"><SelectField label="UAE location" value={values.uaeLocationContext} onChange={(event) => change('uaeLocationContext', event.target.value as Lead['uaeLocationContext'])}>{['inside_uae', 'outside_uae', 'undecided', 'unknown'].map((value) => <option key={value} value={value}>{humanize(value)}</option>)}</SelectField><Field label="Target emirate" value={values.targetEmirate || ''} onChange={(event) => change('targetEmirate', event.target.value)} /></div>
+          <div className="grid gap-4 sm:grid-cols-2"><SelectField label="UAE location" value={values.uaeLocationContext} onChange={(event) => change('uaeLocationContext', event.target.value as Lead['uaeLocationContext'])}>{['inside_uae', 'outside_uae', 'undecided', 'unknown'].map((value) => <option key={value} value={value}>{humanize(value)}</option>)}</SelectField><Field label="Preferred emirate" value={values.targetEmirate || ''} onChange={(event) => change('targetEmirate', event.target.value)} /></div>
           <div className="grid gap-4 sm:grid-cols-2"><Field label="Timeline" value={values.timeline || ''} onChange={(event) => change('timeline', event.target.value)} /><Field label="Language" value={values.detectedLanguage} onChange={(event) => change('detectedLanguage', event.target.value)} /></div>
           <SelectField label="Preferred contact method" value={values.contactMethodPreference || ''} onChange={(event) => change('contactMethodPreference', (event.target.value || null) as Lead['contactMethodPreference'])}><option value="">Not recorded</option>{['whatsapp', 'phone_call', 'instagram_dm'].map((value) => <option key={value} value={value}>{humanize(value)}</option>)}</SelectField>
           <Field label="Next action" value={values.nextAction || ''} onChange={(event) => change('nextAction', event.target.value)} /><Field label="Next action owner" value={values.nextActionOwner || ''} onChange={(event) => change('nextActionOwner', event.target.value)} />

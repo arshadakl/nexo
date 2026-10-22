@@ -184,6 +184,43 @@ export function useToggleTakeover(conversationId: string | null) {
   });
 }
 
+/**
+ * Resumes AI replies. Rejects with ApiError code PENDING_APPROVALS (409) while approvals are
+ * unresolved; pass discardPendingDrafts to discard them (they are never sent).
+ */
+export function useResumeAI(conversationId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: { discardPendingDrafts?: boolean } = {}) =>
+      apiFetch<{ success: boolean; humanTakeover: boolean; automationState: string }>(
+        `/api/conversations/${conversationId}/resume`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.drafts.all });
+    },
+  });
+}
+
+/** Retries a failed outbound message. */
+export function useRetryMessage(conversationId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      apiFetch<Message>(
+        `/api/conversations/${conversationId}/messages/${encodeURIComponent(messageId)}/retry`,
+        { method: 'POST' },
+      ),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.drafts.all });
+    },
+  });
+}
+
 export function useSetAIMode(conversationId: string | null) {
   const queryClient = useQueryClient();
 

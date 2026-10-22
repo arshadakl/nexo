@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalyticsOverview } from '@/hooks/useAnalytics';
 import { navigate, screenPaths, type NavItemKey } from '@/lib/navigation';
+import { ActionQueue } from '@/components/overview/ActionQueue';
 
 interface OverviewViewProps {
   onNavigateTab?: (tab: NavItemKey) => void;
@@ -117,6 +118,9 @@ export function OverviewView({ onNavigateTab }: OverviewViewProps = {}) {
           );
         })}
       </div>
+
+      {/* Conversations that need a person come first */}
+      <ActionQueue />
 
       {/* Main operational panels */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

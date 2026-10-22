@@ -29,6 +29,7 @@ export const queryKeys = {
   },
   analytics: {
     overview: (period: string) => ['analytics', 'overview', period] as const,
+    actionQueue: () => ['analytics', 'action-queue'] as const,
   },
   drafts: {
     all: ['drafts'] as const,

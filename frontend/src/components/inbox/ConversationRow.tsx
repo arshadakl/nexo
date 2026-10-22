@@ -1,7 +1,7 @@
 import { Instagram, MessageCircle, Circle } from 'lucide-react';
 import type { ConversationSummary } from '@shared/types/crm.types';
 import { absoluteTime, relativeTime } from '@/lib/formatDate';
-import { leadLabels } from '@/lib/leadPresentation';
+import { automationLabels, leadLabels, qualificationLabels } from '@/lib/leadPresentation';
 import { cn } from '@/lib/utils';
 
 export function ConversationRow({
@@ -16,6 +16,9 @@ export function ConversationRow({
   onSelect: () => void;
 }) {
   const ChannelIcon = conversation.channel === 'instagram' ? Instagram : MessageCircle;
+  const automationState =
+    conversation.automationState ??
+    (conversation.humanTakeover ? 'human_takeover' : conversation.aiMode === 'OFF' ? 'ai_off' : 'ai_active');
   return (
     <li>
       <a
@@ -63,12 +66,25 @@ export function ConversationRow({
           <span className="sr-only">
             {conversation.channel === 'instagram' ? 'Instagram' : 'WhatsApp'}
           </span>
-          <span className={cn('truncate', conversation.humanTakeover && 'text-warning')}>
-            {conversation.humanTakeover
-              ? 'Human handling'
-              : conversation.lead
-                ? leadLabels[conversation.lead.leadStatus]
-                : 'New conversation'}
+          {/* Automation state and lead qualification are independent and shown side by side. */}
+          {automationState !== 'ai_active' && (
+            <span
+              className={cn(
+                'shrink-0',
+                automationState === 'send_failed' ? 'text-danger' : 'text-warning',
+              )}
+            >
+              {automationLabels[automationState]}
+            </span>
+          )}
+          <span className="truncate">
+            {conversation.lead
+              ? `${leadLabels[conversation.lead.leadStatus]}${
+                  conversation.lead.qualification && conversation.lead.qualification !== 'unknown'
+                    ? ` · ${qualificationLabels[conversation.lead.qualification]}`
+                    : ''
+                }`
+              : 'New conversation'}
           </span>
           {conversation.unreadCount > 0 && (
             <span className="ml-auto flex shrink-0 items-center gap-1 text-foreground">

@@ -1,4 +1,4 @@
-import { AlertCircle, Check, CheckCheck, Clock } from 'lucide-react';
+import { AlertCircle, Check, CheckCheck, Clock, RotateCw } from 'lucide-react';
 import type { Message } from '@shared/types/crm.types';
 import { absoluteTime } from '@/lib/formatDate';
 import { cn } from '@/lib/utils';
@@ -12,7 +12,17 @@ const deliveryLabels = {
   unknown: 'Delivery not confirmed',
 };
 
-export function MessageItem({ message, customerName }: { message: Message; customerName: string }) {
+export function MessageItem({
+  message,
+  customerName,
+  onRetry,
+  isRetrying = false,
+}: {
+  message: Message;
+  customerName: string;
+  onRetry?: (() => void) | undefined;
+  isRetrying?: boolean;
+}) {
   const isOutbound = message.direction === 'outbound';
   const sender =
     message.senderType === 'ai'
@@ -67,6 +77,17 @@ export function MessageItem({ message, customerName }: { message: Message; custo
         >
           <StatusIcon aria-hidden="true" className="size-3.5" />
           <span>{deliveryLabels[message.deliveryStatus] ?? deliveryLabels.unknown}</span>
+          {message.deliveryStatus === 'failed' && onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={isRetrying}
+              className="inline-flex min-h-8 items-center gap-1 rounded-md px-1.5 font-medium underline underline-offset-2 disabled:opacity-60"
+            >
+              <RotateCw aria-hidden="true" className="size-3" />
+              {isRetrying ? 'Retrying…' : 'Retry'}
+            </button>
+          )}
           {message.deliveryStatus === 'failed' && message.errorMessage && (
             <span className="basis-full [overflow-wrap:anywhere]">{message.errorMessage}</span>
           )}
