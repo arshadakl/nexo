@@ -177,4 +177,35 @@ describe('OpenAICompatibleAdapter', () => {
     expect(result.extractedFields.serviceVertical).toBe('residency');
     expect(result.leadStatus).toBe('exploring');
   });
+
+  it('fails closed and sets humanReviewRequired = true when model returns JSON missing required schema fields', async () => {
+    const invalidSchemaContent = JSON.stringify({
+      intent: 'unknown',
+      // missing replyText, missing extractedFields, missing leadStatus, etc.
+    });
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: invalidSchemaContent,
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const result = await adapter.generateQualification(mockConfig, [
+      { role: 'user', content: 'What are your prices?' },
+    ]);
+
+    expect(result.humanReviewRequired).toBe(true);
+    expect(result.leadStatus).toBe('handover_requested');
+    expect(result.safetyFlags).toContain('INVALID_MODEL_OUTPUT');
+    expect(result.replyText).toContain('Let me connect you with our team');
+  });
 });
+
