@@ -20,6 +20,45 @@ import { resolveTenantId, resolveUserId, getMasterKey } from '../lib/authContext
 export const conversationRoutes = new Hono<{ Bindings: WorkerEnv }>();
 
 /**
+ * POST /api/conversations/reset-testing
+ * Complete workspace data reset for testing:
+ * Removes all conversations, messages, message drafts, leads, lead_conversation_links,
+ * and webhook_events for the tenant.
+ * Preserves users, memberships, sessions, integration_connections, and tenant_ai_providers.
+ */
+conversationRoutes.post('/reset-testing', async (c) => {
+  const tenantId = resolveTenantId(c);
+
+  // 1. Delete message drafts
+  await c.env.DB.prepare('DELETE FROM message_drafts WHERE tenant_id = ?').bind(tenantId).run();
+
+  // 2. Delete messages
+  await c.env.DB.prepare('DELETE FROM messages WHERE tenant_id = ?').bind(tenantId).run();
+
+  // 3. Delete lead conversation links
+  await c.env.DB.prepare('DELETE FROM lead_conversation_links WHERE tenant_id = ?').bind(tenantId).run();
+
+  // 4. Delete leads
+  await c.env.DB.prepare('DELETE FROM leads WHERE tenant_id = ?').bind(tenantId).run();
+
+  // 5. Delete conversations
+  await c.env.DB.prepare('DELETE FROM conversations WHERE tenant_id = ?').bind(tenantId).run();
+
+  // 6. Delete webhook events
+  await c.env.DB.prepare('DELETE FROM webhook_events WHERE tenant_id = ?').bind(tenantId).run();
+
+  // 7. Delete ai runs telemetry
+  await c.env.DB.prepare('DELETE FROM ai_runs WHERE tenant_id = ?').bind(tenantId).run();
+
+  logger.info('Purged all testing communication and lead records for tenant', { tenantId });
+
+  return jsonOk(c, {
+    success: true,
+    message: 'Testing data reset complete. All conversations, messages, drafts, and leads have been wiped.',
+  });
+});
+
+/**
  * GET /api/conversations
  * Lists conversation threads with unread counters, channel badges, and linked lead summaries.
  * CPU: < 1.5 ms.

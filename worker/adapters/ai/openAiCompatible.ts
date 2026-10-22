@@ -41,10 +41,12 @@ export class OpenAICompatibleAdapter implements AIProviderClient {
       ...(config.customHeaders || {}),
     };
 
+    const effectiveMaxTokens = Math.max(config.maxTokens || 600, 1500);
+
     const payload = {
       model: config.defaultModel,
       temperature: config.temperature,
-      max_tokens: config.maxTokens,
+      max_tokens: effectiveMaxTokens,
       response_format: { type: 'json_object' },
       messages,
     };
