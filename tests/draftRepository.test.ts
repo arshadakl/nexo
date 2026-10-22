@@ -25,7 +25,7 @@ describe('Message Draft Repository & Schemas', () => {
     ).toBe(false);
   });
 
-  it('getPendingDraft queries by conversation and pending status', async () => {
+  it('getPendingDraft returns the unresolved draft (pending, sending or failed) for a conversation', async () => {
     const firstMock = vi.fn().mockResolvedValue({
       id: 'draft_1',
       tenant_id: 'tenant_1',
@@ -45,7 +45,10 @@ describe('Message Draft Repository & Schemas', () => {
 
     const draft = await draftRepository.getPendingDraft(mockDb, 'tenant_1', 'convo_1');
 
-    expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining("status = 'pending_review'"));
+    // based_on_message_at is null, so no follow-up "new messages" query is needed.
+    expect(prepareMock).toHaveBeenCalledWith(
+      expect.stringContaining("status IN ('pending_review', 'sending', 'send_failed')")
+    );
     expect(bindMock).toHaveBeenCalledWith('tenant_1', 'convo_1');
     expect(draft).not.toBeNull();
     expect(draft?.suggestedText).toBe('Hey 👋 How can we help?');
