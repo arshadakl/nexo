@@ -7,15 +7,31 @@ import {
 } from '../shared/schemas/conversation.schema';
 
 describe('Conversation Repository & Schemas', () => {
-  it('removes pending AI drafts as well as messages when a conversation is reset', async () => {
+  it('removes pending AI drafts and messages and resets ai_mode to ON when clear is invoked without deleting leads', async () => {
     const calls: { sql: string; params: unknown[] }[] = [];
     const prepare = vi.fn((sql: string) => ({ bind: (...params: unknown[]) => {
       calls.push({ sql, params });
       return { all: async () => ({ results: [] }), run: async () => ({ success: true }) };
     } }));
-    await conversationRepository.clearConversationHistory({ prepare } as any, 'tenant_1', 'convo_1');
+    await conversationRepository.clearConversationHistory({ prepare } as any, 'tenant_1', 'convo_1', false);
     expect(calls.find((call) => call.sql.includes('DELETE FROM message_drafts'))?.params).toEqual(['tenant_1', 'convo_1']);
     expect(calls.find((call) => call.sql.includes('DELETE FROM messages'))?.params).toEqual(['tenant_1', 'convo_1']);
+    expect(calls.find((call) => call.sql.includes('DELETE FROM leads'))).toBeUndefined();
+    expect(calls.find((call) => call.sql.includes('UPDATE conversations SET') && call.sql.includes("ai_mode = 'ON'"))).toBeDefined();
+  });
+
+  it('deletes leads and conversation links when deleteLead is true', async () => {
+    const calls: { sql: string; params: unknown[] }[] = [];
+    const prepare = vi.fn((sql: string) => ({ bind: (...params: unknown[]) => {
+      calls.push({ sql, params });
+      return {
+        all: async () => ({ results: [{ lead_id: 'lead_123' }] }),
+        run: async () => ({ success: true }),
+      };
+    } }));
+    await conversationRepository.clearConversationHistory({ prepare } as any, 'tenant_1', 'convo_1', true);
+    expect(calls.find((call) => call.sql.includes('DELETE FROM lead_conversation_links'))?.params).toEqual(['tenant_1', 'convo_1']);
+    expect(calls.find((call) => call.sql.includes('DELETE FROM leads'))?.params).toEqual(['tenant_1', 'lead_123']);
   });
   it('returns the newest bounded message window in chronological order', async () => {
     const rows = Array.from({ length: 50 }, (_, index) => ({

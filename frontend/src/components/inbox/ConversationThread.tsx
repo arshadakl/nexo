@@ -98,6 +98,7 @@ function ConversationSession({
   const { draft, update, start, finish } = useComposerDraft(id);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isClearOpen, setIsClearOpen] = useState(false);
+  const [clearLeadData, setClearLeadData] = useState(false);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const streamRef = useRef<HTMLDivElement>(null);
   const isNearBottom = useRef(true);
@@ -418,21 +419,59 @@ function ConversationSession({
       {isClearOpen && (
         <Dialog
           alert
-          title="Clear conversation history?"
+          title="Clear conversation options"
           onClose={() => setIsClearOpen(false)}
           isBusy={clear.isPending}
         >
           <div className="space-y-4 p-4">
-            <p className="text-sm leading-6">
-            This permanently deletes the messages, AI drafts, and linked qualification profile for{' '}
-              {conversation.customerName}. It cannot be undone.
+            <p className="text-sm leading-6 text-foreground/90">
+              Choose how you would like to clear history for{' '}
+              <strong className="font-semibold text-foreground">{conversation.customerName}</strong>. This cannot be undone:
             </p>
+
+            <div className="space-y-2.5">
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card/60 hover:bg-accent/40 cursor-pointer transition-colors">
+                <input
+                  type="radio"
+                  name="clearOption"
+                  className="mt-1"
+                  checked={!clearLeadData}
+                  onChange={() => setClearLeadData(false)}
+                  disabled={clear.isPending}
+                />
+                <div className="text-sm">
+                  <div className="font-medium text-foreground">Just clear the chat</div>
+                  <div className="text-muted-foreground text-xs mt-0.5">
+                    Deletes messages and pending AI drafts. Retains the applicant profile in Leads CRM and keeps lead details intact.
+                  </div>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-destructive/30 bg-destructive/5 hover:bg-destructive/10 cursor-pointer transition-colors">
+                <input
+                  type="radio"
+                  name="clearOption"
+                  className="mt-1 text-destructive"
+                  checked={clearLeadData}
+                  onChange={() => setClearLeadData(true)}
+                  disabled={clear.isPending}
+                />
+                <div className="text-sm">
+                  <div className="font-medium text-destructive">Chat + Lead data (Full reset)</div>
+                  <div className="text-muted-foreground text-xs mt-0.5">
+                    Deletes messages, drafts, and completely removes the lead from the Leads section for clean re-testing.
+                  </div>
+                </div>
+              </label>
+            </div>
+
             {clear.isError && (
               <p role="alert" className="text-[13px] text-danger">
                 Could not clear the conversation. Please try again.
               </p>
             )}
-            <div className="flex justify-end gap-2">
+
+            <div className="flex justify-end gap-2 pt-2">
               <Button
                 type="button"
                 variant="outline"
@@ -443,22 +482,31 @@ function ConversationSession({
               </Button>
               <Button
                 type="button"
-                variant="destructive"
+                variant={clearLeadData ? 'destructive' : 'default'}
                 disabled={clear.isPending}
                 onClick={() =>
-                  clear.mutate(undefined, {
-                    onSuccess: () => {
-                      setIsClearOpen(false);
-                      update(id, {
-                        editing: null,
-                        error: null,
-                        notice: 'Conversation history cleared.',
-                      });
+                  clear.mutate(
+                    { deleteLead: clearLeadData },
+                    {
+                      onSuccess: () => {
+                        setIsClearOpen(false);
+                        update(id, {
+                          editing: null,
+                          error: null,
+                          notice: clearLeadData
+                            ? 'Chat history and lead data cleared.'
+                            : 'Chat history cleared. Lead preserved.',
+                        });
+                      },
                     },
-                  })
+                  )
                 }
               >
-                {clear.isPending ? 'Clearing…' : 'Clear history'}
+                {clear.isPending
+                  ? 'Clearing…'
+                  : clearLeadData
+                    ? 'Clear chat & delete lead'
+                    : 'Clear chat only'}
               </Button>
             </div>
           </div>

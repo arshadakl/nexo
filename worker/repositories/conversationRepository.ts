@@ -362,17 +362,21 @@ export class ConversationRepository {
   }
 
   /**
-   * Clears all messages and lead links for a conversation so the client is treated as a brand new lead.
+   * Clears conversation history and drafts.
+   * If deleteLead is true, deletes lead links and the associated leads records.
+   * If deleteLead is false, clears message history only and preserves lead records.
+   * Resets ai_mode to 'ON' so future incoming messages auto-reply without needing manual intervention.
    * CPU: < 1.5 ms.
    */
   async clearConversationHistory(
     db: D1Database,
     tenantId: string,
-    conversationId: string
+    conversationId: string,
+    deleteLead: boolean = false
   ): Promise<void> {
     const now = Date.now();
 
-    // 1. Get associated lead IDs before deleting links
+    // 1. Get associated lead IDs before deleting links if lead deletion requested
     const leadLinks = await db
       .prepare('SELECT lead_id FROM lead_conversation_links WHERE tenant_id = ? AND conversation_id = ?')
       .bind(tenantId, conversationId)
@@ -392,22 +396,23 @@ export class ConversationRepository {
       .bind(tenantId, conversationId)
       .run();
 
-    // 3. Delete lead_conversation_links for this conversation
-    await db
-      .prepare('DELETE FROM lead_conversation_links WHERE tenant_id = ? AND conversation_id = ?')
-      .bind(tenantId, conversationId)
-      .run();
-
-    // 4. Delete the orphaned leads
-    if (leadIds.length > 0) {
-      const placeholders = leadIds.map(() => '?').join(',');
+    // 3. If deleteLead is true, unlink and delete the lead records
+    if (deleteLead) {
       await db
-        .prepare(`DELETE FROM leads WHERE tenant_id = ? AND id IN (${placeholders})`)
-        .bind(tenantId, ...leadIds)
+        .prepare('DELETE FROM lead_conversation_links WHERE tenant_id = ? AND conversation_id = ?')
+        .bind(tenantId, conversationId)
         .run();
+
+      if (leadIds.length > 0) {
+        const placeholders = leadIds.map(() => '?').join(',');
+        await db
+          .prepare(`DELETE FROM leads WHERE tenant_id = ? AND id IN (${placeholders})`)
+          .bind(tenantId, ...leadIds)
+          .run();
+      }
     }
 
-    // 5. Reset conversation metadata, human takeover, and customer name
+    // 4. Reset conversation metadata, human takeover, and reset AI mode to ON so future messages auto-reply
     await db
       .prepare(
         `UPDATE conversations SET 
@@ -415,7 +420,7 @@ export class ConversationRepository {
           human_takeover = 0, 
           takeover_user_id = NULL, 
           takeover_at = NULL, 
-          ai_mode = 'INHERIT', 
+          ai_mode = 'ON', 
           last_outbound_at = NULL,
           updated_at = ? 
         WHERE tenant_id = ? AND id = ?`

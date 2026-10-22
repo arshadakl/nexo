@@ -228,13 +228,16 @@ export function useClearConversationHistory(conversationId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () =>
-      apiFetch<{ success: boolean; conversationId: string; message: string }>(
-        `/api/conversations/${conversationId}/messages`,
+    mutationFn: (variables?: { deleteLead?: boolean }) => {
+      const deleteLead = Boolean(variables?.deleteLead);
+      return apiFetch<{ success: boolean; conversationId: string; deleteLead?: boolean; message: string }>(
+        `/api/conversations/${conversationId}/messages?deleteLead=${deleteLead}`,
         {
           method: 'DELETE',
+          body: JSON.stringify({ deleteLead }),
         },
-      ),
+      );
+    },
     onSuccess: () => {
       if (!conversationId) return;
 

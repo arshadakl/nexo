@@ -291,6 +291,19 @@ conversationRoutes.delete('/:id/messages', async (c) => {
   const tenantId = resolveTenantId(c);
   const conversationId = c.req.param('id');
 
+  // Support deleteLead flag via query parameter (?deleteLead=true) or optional JSON body
+  let deleteLead = c.req.query('deleteLead') === 'true';
+  if (!deleteLead) {
+    try {
+      const body = await c.req.json();
+      if (body && typeof body.deleteLead === 'boolean') {
+        deleteLead = body.deleteLead;
+      }
+    } catch {
+      // Body is optional on DELETE requests
+    }
+  }
+
   const conversation = await conversationRepository.getConversationById(
     c.env.DB,
     tenantId,
@@ -304,12 +317,16 @@ conversationRoutes.delete('/:id/messages', async (c) => {
   await conversationRepository.clearConversationHistory(
     c.env.DB,
     tenantId,
-    conversationId
+    conversationId,
+    deleteLead
   );
 
   return jsonOk(c, {
     success: true,
     conversationId,
-    message: 'Chat history cleared. Future messages will be treated as a new lead inquiry.',
+    deleteLead,
+    message: deleteLead
+      ? 'Chat history and lead data cleared.'
+      : 'Chat history cleared. Lead data preserved.',
   });
 });
