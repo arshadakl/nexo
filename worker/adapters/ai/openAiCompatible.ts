@@ -137,45 +137,60 @@ export class OpenAICompatibleAdapter implements AIProviderClient {
         return validated.data as unknown as AIQualificationResult;
       }
 
-      // Safe fallback ensuring replyText is always delivered
+      logger.warn('AI structured output failed schema validation; triggering fail-closed human review fallback', {
+        provider: config.name,
+        model: config.defaultModel,
+        validationIssues: validated.error.issues,
+        rawSnippet: content.slice(0, 300),
+      });
+
+      // Fail-closed fallback: never auto-send invalid model responses
       return {
-        intent: (parsedContent.intent || 'residency') as any,
-        language: parsedContent.language || 'en',
-        toneMirroring: parsedContent.toneMirroring || null,
-        replyText: parsedContent.replyText || content.trim(),
-        rationale: parsedContent.rationale || null,
-        extractedFields: parsedContent.extractedFields || {},
-        fieldConfidence: parsedContent.fieldConfidence || {},
-        missingFields: Array.isArray(parsedContent.missingFields) ? parsedContent.missingFields : [],
-        questionsAnswered: Array.isArray(parsedContent.questionsAnswered) ? parsedContent.questionsAnswered : [],
-        leadStatus: parsedContent.leadStatus || 'needs_clarification',
-        statusReason: parsedContent.statusReason || 'Extracted via fallback parser',
-        expertMatchCriteria: parsedContent.expertMatchCriteria,
-        humanReviewRequired: Boolean(parsedContent.humanReviewRequired),
-        safetyFlags: Array.isArray(parsedContent.safetyFlags) ? parsedContent.safetyFlags : [],
+        intent: 'unknown',
+        language: 'en',
+        toneMirroring: null,
+        replyText: 'Thanks for reaching out! Let me connect you with our team to assist you directly.',
+        rationale: 'Schema validation failed; triggering safe human review fallback.',
+        extractedFields: {},
+        fieldConfidence: {},
+        missingFields: [],
+        questionsAnswered: [],
+        unansweredQuestions: [],
+        confusions: [],
+        leadStatus: 'handover_requested',
+        statusReason: 'AI model returned non-conforming schema payload',
+        expertMatchCriteria: undefined,
+        humanReviewRequired: true,
+        humanReviewReason: 'Schema validation failed against AIQualificationResultSchema',
+        safetyFlags: ['INVALID_MODEL_OUTPUT'],
       };
     } catch (parseErr) {
       if (parseErr instanceof AIProviderError) {
         throw parseErr;
       }
-      logger.warn('AI structured output fallback used', {
+      logger.error('Exception parsing structured AI output; triggering fail-closed human review fallback', parseErr, {
         provider: config.name,
         model: config.defaultModel,
         rawSnippet: content.slice(0, 200),
       });
       return {
-        intent: 'residency',
+        intent: 'unknown',
         language: 'en',
-        replyText: content.trim(),
-        rationale: 'Exception occurred during JSON parsing',
+        toneMirroring: null,
+        replyText: 'Thanks for reaching out! Let me connect you with our team to assist you directly.',
+        rationale: 'Exception occurred during JSON parsing; triggering safe human fallback.',
         extractedFields: {},
         fieldConfidence: {},
         missingFields: [],
         questionsAnswered: [],
-        leadStatus: 'needs_clarification',
+        unansweredQuestions: [],
+        confusions: [],
+        leadStatus: 'handover_requested',
         statusReason: 'Exception parsing structured AI output',
-        humanReviewRequired: false,
-        safetyFlags: [],
+        expertMatchCriteria: undefined,
+        humanReviewRequired: true,
+        humanReviewReason: 'Exception parsing structured AI output',
+        safetyFlags: ['JSON_PARSE_EXCEPTION'],
       };
     }
   }

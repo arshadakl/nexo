@@ -16,6 +16,7 @@ export const AIQualificationResultSchema = z.object({
       'general_enquiry',
       'human_request',
       'support_status',
+      'outside_scope_request',
       'outside_scope_spam',
       'unknown',
     ])
@@ -37,6 +38,12 @@ export const AIQualificationResultSchema = z.object({
       contactMethodPreference: ContactMethodPreferenceEnum.optional(),
       contactPermission: z.boolean().optional(),
       externalSharingPermission: z.boolean().optional(),
+      currentLocation: z.string().nullable().optional(),
+      nationality: z.string().nullable().optional(),
+      profession: z.string().nullable().optional(),
+      whatsappNumber: z.string().nullable().optional(),
+      whatsappSameAsPhone: z.boolean().nullable().optional(),
+      whatsappContactPermission: z.boolean().nullable().optional(),
 
       // Compatibility fallback
       phoneNumber: z.string().optional(),
@@ -45,6 +52,8 @@ export const AIQualificationResultSchema = z.object({
   fieldConfidence: z.record(z.number().min(0).max(1)).default({}),
   missingFields: z.array(z.string()).default([]),
   questionsAnswered: z.array(z.string()).default([]),
+  unansweredQuestions: z.array(z.string()).default([]),
+  confusions: z.array(z.string()).default([]),
   leadStatus: LeadStatusEnum.default('needs_clarification'),
   statusReason: z.string().default(''),
   expertMatchCriteria: z

@@ -85,7 +85,7 @@ export interface AIProviderPreset {
 import type { LeadStatus, ServiceVertical, ResidencyIntent, LocationContext, ContactMethodPreference } from './crm.types';
 
 export interface AIQualificationResult {
-  intent: 'residency' | 'business_setup' | 'both' | 'general_enquiry' | 'human_request' | 'support_status' | 'outside_scope_spam' | 'unknown';
+  intent: 'residency' | 'business_setup' | 'both' | 'general_enquiry' | 'human_request' | 'support_status' | 'outside_scope_request' | 'outside_scope_spam' | 'unknown';
   language: string; // 'en' | 'ml' etc.
   toneMirroring?: string | null; // e.g. 'casual_bro' | 'polite_formal'
   replyText: string | null;
@@ -103,12 +103,21 @@ export interface AIQualificationResult {
     contactPermission?: boolean | undefined;
     externalSharingPermission?: boolean | undefined;
     
+    currentLocation?: string | undefined;
+    nationality?: string | undefined;
+    profession?: string | undefined;
+    whatsappNumber?: string | undefined;
+    whatsappSameAsPhone?: boolean | undefined;
+    whatsappContactPermission?: boolean | undefined;
+
     // Legacy fallback compatibility
     phoneNumber?: string | undefined;
   };
   fieldConfidence?: Record<string, number>;
   missingFields: string[];
   questionsAnswered?: string[];
+  unansweredQuestions?: string[];
+  confusions?: string[];
   leadStatus: LeadStatus;
   statusReason: string;
   expertMatchCriteria?: {

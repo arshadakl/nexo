@@ -58,6 +58,7 @@ export type LeadStatus =
   | 'handover_requested'
   | 'handed_over'
   | 'support_enquiry'
+  | 'outside_scope_request'
   | 'outside_scope_spam';
 
 export type ServiceVertical = 'residency' | 'business_setup' | 'both' | 'unspecified';
@@ -99,6 +100,15 @@ export interface Lead {
   lastQualifiedAt?: number | null;
   createdAt: number;
   updatedAt: number;
+
+  currentLocation?: string | null;
+  nationality?: string | null;
+  profession?: string | null;
+  whatsappNumber?: string | null;
+  whatsappSameAsPhone?: boolean | null;
+  whatsappContactPermission?: boolean | null;
+  unansweredQuestions?: string[];
+  confusions?: string[];
 
   // Compatibility getters/fallbacks
   phoneNumber?: string | null;
