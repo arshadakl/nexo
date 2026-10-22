@@ -4,6 +4,46 @@ export type ConversationAIMode = 'INHERIT' | 'ON' | 'OFF';
 
 export type ConversationStatus = 'open' | 'closed' | 'archived';
 
+/**
+ * Who is currently allowed to reply. Derived from pending drafts, the explicit human takeover flag
+ * and ai_mode; independent of lead qualification.
+ */
+export type AutomationState =
+  | 'ai_active'
+  | 'approval_pending'
+  | 'approval_sending'
+  | 'send_failed'
+  | 'human_takeover'
+  | 'ai_off';
+
+/** Lead qualification (sales temperature), kept separate from lead workflow status. */
+export type LeadQualification = 'hot' | 'warm' | 'cold' | 'unknown' | 'outside_scope';
+
+/** Lead profile fields a dashboard user can confirm; confirmed values are never replaced by AI extraction. */
+export type ConfirmableLeadField =
+  | 'fullName'
+  | 'phoneOrEmail'
+  | 'whatsappNumber'
+  | 'nationality'
+  | 'currentCountry'
+  | 'currentCity'
+  | 'currentLocation'
+  | 'targetEmirate'
+  | 'visaStatus'
+  | 'timeline'
+  | 'profession'
+  | 'workBusinessActivity'
+  | 'serviceVertical'
+  | 'residencyIntent'
+  | 'uaeLocationContext';
+
+export interface AISuggestion {
+  field: string;
+  value: string;
+  keptValue?: string | null;
+  at: number;
+}
+
 export interface Conversation {
   id: string;
   tenantId: string;
@@ -110,6 +150,16 @@ export interface Lead {
   unansweredQuestions?: string[];
   confusions?: string[];
 
+  currentCountry?: string | null;
+  currentCity?: string | null;
+  visaStatus?: string | null;
+  timelineStatedAt?: number | null;
+  qualification?: LeadQualification;
+  qualificationReason?: string | null;
+  contactPending?: boolean;
+  confirmedFields?: string[];
+  aiSuggestions?: AISuggestion[];
+
   // Compatibility getters/fallbacks
   phoneNumber?: string | null;
 }
@@ -123,6 +173,8 @@ export interface LeadSummarySnippet {
   leadStatus: LeadStatus;
   statusReason?: string | null;
   missingDetails: string[];
+  qualification?: LeadQualification;
+  qualificationReason?: string | null;
 }
 
 export interface ConversationSummary {
@@ -137,6 +189,7 @@ export interface ConversationSummary {
   humanTakeover: boolean;
   aiMode: ConversationAIMode;
   status: ConversationStatus;
+  automationState?: AutomationState;
   lead?: LeadSummarySnippet | null;
 }
 

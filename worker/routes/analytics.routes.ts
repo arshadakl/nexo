@@ -18,3 +18,13 @@ analyticsRoutes.get('/overview', async (c) => {
 
   return jsonOk(c, metrics);
 });
+
+/**
+ * GET /api/analytics/action-queue
+ * Conversations that need a person, each with a reason and the next action.
+ */
+analyticsRoutes.get('/action-queue', async (c) => {
+  const tenantId = resolveTenantId(c);
+  const items = await analyticsService.getActionQueue(c.env.DB, tenantId);
+  return jsonOk(c, items);
+});

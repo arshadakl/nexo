@@ -1,4 +1,6 @@
 import type { NormalizedWhatsAppMessage } from '@shared/types/whatsapp.types';
+import type { InboundAttachment } from '@shared/types/meta.types';
+import { classifyAttachments, placeholderText } from '../../lib/inboundContent';
 
 export class WhatsAppWebhookAdapter {
   /**
@@ -54,6 +56,17 @@ export class WhatsAppWebhookAdapter {
             messageText = String(msg.button.text);
           }
 
+          const attachments: InboundAttachment[] = [];
+          if (['audio', 'voice', 'image', 'video', 'sticker', 'document'].includes(msg.type)) {
+            attachments.push({ type: msg.type });
+            const caption = msg[msg.type]?.caption;
+            if (typeof caption === 'string') messageText = caption.trim();
+          } else if (!messageText && msg.type && msg.type !== 'text' && msg.type !== 'reaction') {
+            attachments.push({ type: 'unsupported' });
+          }
+          const messageType = classifyAttachments(attachments);
+          if (!messageText) messageText = placeholderText(messageType);
+
           if (messageText && senderPhone) {
             events.push({
               eventKey: `wa_msg_${phoneNumberId}_${providerMessageId}`,
@@ -65,6 +78,8 @@ export class WhatsAppWebhookAdapter {
               senderPhone,
               senderName,
               messageText,
+              messageType,
+              attachments,
               timestamp,
             });
           }

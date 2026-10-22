@@ -56,6 +56,7 @@ app.all('/api/*', (c) => {
 
 import { processQueueBatch } from './queue/consumer';
 import { tokenRefreshService } from './services/tokenRefreshService';
+import { sweepUnprocessedConversations } from './services/conversationAutomation';
 
 // Single Cloudflare Worker Export: fetch, queue, scheduled
 export default {
@@ -106,9 +107,13 @@ export default {
         env.MESSAGING_QUEUE
       );
 
+      // 3. Re-enqueue conversations whose customer messages were never answered
+      const recoveredConversations = await sweepUnprocessedConversations(env);
+
       logger.info('Scheduled cron execution completed', {
         refreshedTokens: refreshedCount,
         recoveredWebhooks: recoveredCount,
+        recoveredConversations,
         errorCount: errors.length,
       });
     } catch (err) {

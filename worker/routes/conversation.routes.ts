@@ -12,6 +12,9 @@ import {
 } from '@shared/schemas/conversation.schema';
 import { leadRepository } from '../repositories/leadRepository';
 import { logger } from '../lib/logger';
+import { continueIfClear, resumeAI } from '../services/conversationAutomation';
+import { dispatchOutboundText } from '../services/outboundDispatch';
+import { sendDraft } from '../services/draftLifecycle';
 import type { WorkerEnv } from '../env';
 import type { ChannelType, ConversationStatus } from '@shared/types/crm.types';
 
@@ -250,11 +253,135 @@ conversationRoutes.post('/:id/takeover', async (c) => {
     userId
   );
 
+  // Releasing a takeover lets waiting customer messages be answered, unless an approval still pauses.
+  const snapshot = parseResult.data.takeover
+    ? null
+    : await continueIfClear(c.env, tenantId, conversationId, 'takeover_released');
+
   return jsonOk(c, {
     success: true,
     conversationId,
     humanTakeover: parseResult.data.takeover,
+    automationState: snapshot?.state ?? (parseResult.data.takeover ? 'human_takeover' : undefined),
   });
+});
+
+/**
+ * POST /api/conversations/:id/resume
+ * Resumes AI replies: clears human takeover and AI-off. Fails with 409 while approvals are
+ * unresolved unless { discardPendingDrafts: true } is sent (discarded drafts are never sent).
+ */
+conversationRoutes.post('/:id/resume', async (c) => {
+  const tenantId = resolveTenantId(c);
+  const conversationId = c.req.param('id');
+  let body: any = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    // Body is optional
+  }
+
+  const outcome = await resumeAI(c.env, {
+    tenantId,
+    conversationId,
+    discardPendingDrafts: body?.discardPendingDrafts === true,
+    userId: resolveUserId(c),
+  });
+
+  if (outcome.kind === 'conflict') {
+    return jsonError(
+      c,
+      'PENDING_APPROVALS',
+      outcome.sendingDrafts > 0
+        ? 'An approved reply is being sent right now. Try again in a moment.'
+        : `${outcome.pendingDrafts} reply awaiting approval must be resolved before resuming AI.`,
+      409,
+      outcome
+    );
+  }
+
+  return jsonOk(c, {
+    success: true,
+    conversationId,
+    humanTakeover: false,
+    automationState: outcome.snapshot?.state ?? 'ai_active',
+  });
+});
+
+/**
+ * POST /api/conversations/:id/messages/:messageId/retry
+ * Retries a failed outbound message. Messages sent from an approved draft retry through the draft.
+ */
+conversationRoutes.post('/:id/messages/:messageId/retry', async (c) => {
+  const tenantId = resolveTenantId(c);
+  const conversationId = c.req.param('id');
+  const messageId = c.req.param('messageId');
+
+  const message = await c.env.DB
+    .prepare(
+      `SELECT id, message_text, metadata_json, delivery_status FROM messages
+       WHERE id = ? AND tenant_id = ? AND conversation_id = ? AND direction = 'outbound'`
+    )
+    .bind(messageId, tenantId, conversationId)
+    .first<any>();
+  if (!message) return jsonError(c, 'NOT_FOUND', 'Message not found', 404);
+
+  let draftId: string | null = null;
+  try {
+    draftId = message.metadata_json ? JSON.parse(message.metadata_json).draftId || null : null;
+  } catch {}
+
+  if (draftId) {
+    const outcome = await sendDraft(c.env, {
+      tenantId,
+      draftId,
+      userId: resolveUserId(c),
+      masterKey: getMasterKey(c),
+      acknowledgeNewMessages: true,
+      mode: 'retry',
+    });
+    if (outcome.kind === 'sent' || outcome.kind === 'failed') {
+      const rows = await conversationRepository.listMessages(c.env.DB, tenantId, conversationId, 100);
+      const updated = rows.find((m) => m.id === messageId);
+      return outcome.kind === 'sent'
+        ? jsonOk(c, updated)
+        : jsonError(c, 'SEND_FAILED', `The reply was not delivered: ${outcome.error}`, 502, updated);
+    }
+    return jsonError(c, 'CONFLICT', 'This message can no longer be retried.', 409);
+  }
+
+  const claim = await c.env.DB
+    .prepare(
+      `UPDATE messages SET delivery_status = 'pending', error_message = NULL
+       WHERE id = ? AND tenant_id = ? AND delivery_status = 'failed'`
+    )
+    .bind(messageId, tenantId)
+    .run();
+  if (claim.meta.changes === 0) {
+    return jsonError(c, 'CONFLICT', `Message is in status '${message.delivery_status}' and cannot be retried`, 409);
+  }
+
+  const conversation = await conversationRepository.getConversationById(c.env.DB, tenantId, conversationId);
+  if (!conversation) return jsonError(c, 'NOT_FOUND', 'Conversation not found', 404);
+
+  const result = await dispatchOutboundText(
+    c.env.DB,
+    getMasterKey(c),
+    { connectionId: conversation.connectionId, channel: conversation.channel, customerId: conversation.customerId },
+    message.message_text
+  );
+  await conversationRepository.updateMessageDelivery(
+    c.env.DB,
+    messageId,
+    result.ok ? 'delivered' : 'failed',
+    result.ok ? result.providerMessageId || undefined : undefined,
+    result.ok ? undefined : result.error
+  );
+  const rows = await conversationRepository.listMessages(c.env.DB, tenantId, conversationId, 100);
+  const updated = rows.find((m) => m.id === messageId);
+  return result.ok
+    ? jsonOk(c, updated)
+    : jsonError(c, 'SEND_FAILED', `The message was not delivered: ${result.error}`, 502, updated);
 });
 
 /**
@@ -283,6 +410,10 @@ conversationRoutes.post('/:id/ai-mode', async (c) => {
     conversationId,
     parseResult.data.aiMode
   );
+
+  if (parseResult.data.aiMode !== 'OFF') {
+    await continueIfClear(c.env, tenantId, conversationId, 'ai_mode_enabled');
+  }
 
   return jsonOk(c, {
     success: true,

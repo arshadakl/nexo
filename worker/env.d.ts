@@ -7,6 +7,7 @@ export interface WorkerEnv {
   // Non-secret vars
   ENVIRONMENT: 'development' | 'staging' | 'production';
   META_GRAPH_API_VERSION: string;
+  INBOUND_DEBOUNCE_SECONDS?: string; // Groups consecutive inbound messages into one turn (default 4)
 
   // Secrets
   SESSION_SECRET?: string;

@@ -4,7 +4,14 @@ import { instagramWebhookAdapter } from '../adapters/meta/instagramWebhook';
 import { instagramOAuthAdapter } from '../adapters/meta/instagramOAuth';
 import { whatsappWebhookAdapter } from '../adapters/meta/whatsappWebhook';
 import { logger } from '../lib/logger';
+import { conversationRepository } from '../repositories/conversationRepository';
 import type { WorkerEnv } from '../env';
+
+/** Seconds to wait before processing so rapidly consecutive messages form one conversational turn. */
+export function inboundDebounceSeconds(env: Pick<WorkerEnv, 'INBOUND_DEBOUNCE_SECONDS'>): number {
+  const parsed = Number(env.INBOUND_DEBOUNCE_SECONDS);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.min(Math.round(parsed), 60) : 4;
+}
 
 export const webhookRoutes = new Hono<{ Bindings: WorkerEnv }>();
 
@@ -75,10 +82,6 @@ webhookRoutes.post('/meta/instagram', async (c) => {
   const now = Date.now();
 
   for (const event of events) {
-    if (!event.messageText || event.messageText.trim().length === 0) {
-      continue;
-    }
-
     const eventId = crypto.randomUUID();
 
     try {
@@ -99,7 +102,7 @@ webhookRoutes.post('/meta/instagram', async (c) => {
       const connectionId = connection?.id || null;
 
       // Durable D1 insert directly with status 'enqueued' (saves 1 round-trip)
-      await c.env.DB
+      const ingested = await c.env.DB
         .prepare(
           `INSERT INTO webhook_events (
             id, tenant_id, connection_id, event_key, provider,
@@ -109,6 +112,9 @@ webhookRoutes.post('/meta/instagram', async (c) => {
         )
         .bind(eventId, tenantId, connectionId, event.eventKey, JSON.stringify(event), now)
         .run();
+
+      // Meta redelivers webhooks; a known event_key was already ingested and enqueued.
+      if (ingested.meta.changes === 0) continue;
 
       // Immediately persist conversation and message into D1 so inbox updates in real-time
       if (tenantId && connectionId) {
@@ -178,34 +184,29 @@ webhookRoutes.post('/meta/instagram', async (c) => {
             .run();
         }
 
-        const msgId = crypto.randomUUID();
-        await c.env.DB
-          .prepare(
-            `INSERT INTO messages (
-              id, tenant_id, conversation_id, provider_message_id, direction,
-              sender_type, sender_id, message_text, message_type, delivery_status, created_at
-            ) VALUES (?, ?, ?, ?, 'inbound', 'applicant', ?, ?, 'text', 'delivered', ?)
-            ON CONFLICT(provider_message_id) DO NOTHING`
-          )
-          .bind(
-            msgId,
-            tenantId,
-            conversationId,
-            event.providerMessageId,
-            event.senderId,
-            event.messageText,
-            now
-          )
-          .run();
+        await conversationRepository.insertInboundMessage(c.env.DB, {
+          tenantId,
+          conversationId,
+          providerMessageId: event.providerMessageId,
+          senderId: event.senderId,
+          messageText: event.messageText,
+          messageType: event.messageType,
+          attachments: event.attachments,
+          timestamp: event.timestamp,
+        });
       }
 
-      // Enqueue lightweight pointer to Cloudflare Queue for async AI qualification
-      await c.env.MESSAGING_QUEUE.send({
-        eventId,
-        schemaVersion: 1,
-        provider: 'instagram',
-        timestamp: now,
-      });
+      // Enqueue lightweight pointer to Cloudflare Queue for async AI qualification.
+      // The delay groups rapidly consecutive messages into one turn (see queue consumer).
+      await c.env.MESSAGING_QUEUE.send(
+        {
+          eventId,
+          schemaVersion: 1,
+          provider: 'instagram',
+          timestamp: now,
+        },
+        { delaySeconds: inboundDebounceSeconds(c.env) }
+      );
     } catch (err) {
       logger.error('Failed to durably ingest webhook event', err, {
         eventKey: event.eventKey,
@@ -292,7 +293,7 @@ webhookRoutes.post('/meta/whatsapp', async (c) => {
       const connectionId = connection?.id || null;
 
       // Durable D1 insert directly with status 'enqueued' (saves 1 round-trip)
-      await c.env.DB
+      const ingested = await c.env.DB
         .prepare(
           `INSERT INTO webhook_events (
             id, tenant_id, connection_id, event_key, provider,
@@ -303,13 +304,19 @@ webhookRoutes.post('/meta/whatsapp', async (c) => {
         .bind(eventId, tenantId, connectionId, event.eventKey, JSON.stringify(event), now)
         .run();
 
-      // Enqueue to Cloudflare Queue
-      await c.env.MESSAGING_QUEUE.send({
-        eventId,
-        schemaVersion: 1,
-        provider: 'whatsapp',
-        timestamp: now,
-      });
+      // Meta redelivers webhooks; a known event_key was already ingested and enqueued.
+      if (ingested.meta.changes === 0) continue;
+
+      // Enqueue to Cloudflare Queue (delayed so consecutive messages form one turn)
+      await c.env.MESSAGING_QUEUE.send(
+        {
+          eventId,
+          schemaVersion: 1,
+          provider: 'whatsapp',
+          timestamp: now,
+        },
+        { delaySeconds: inboundDebounceSeconds(c.env) }
+      );
     } catch (err) {
       logger.error('Failed to durably ingest WhatsApp webhook event', err, {
         eventKey: event.eventKey,

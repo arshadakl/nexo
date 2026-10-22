@@ -36,5 +36,7 @@ export interface NormalizedWhatsAppMessage {
   senderPhone: string;
   senderName?: string | undefined;
   messageText: string;
+  messageType?: import('./meta.types').InboundMessageType | undefined;
+  attachments?: import('./meta.types').InboundAttachment[] | undefined;
   timestamp: number;
 }

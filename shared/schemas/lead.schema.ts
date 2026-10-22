@@ -32,6 +32,8 @@ export const LocationContextEnum = z.enum([
   'unknown',
 ]);
 
+export const LeadQualificationEnum = z.enum(['hot', 'warm', 'cold', 'unknown', 'outside_scope']);
+
 export const ContactMethodPreferenceEnum = z.enum([
   'whatsapp',
   'phone_call',
@@ -59,6 +61,12 @@ export const UpdateLeadSchema = z.object({
   whatsappContactPermission: z.boolean().nullable().optional(),
   unansweredQuestions: z.array(z.string()).optional(),
   confusions: z.array(z.string()).optional(),
+  currentCountry: z.string().nullable().optional(),
+  currentCity: z.string().nullable().optional(),
+  visaStatus: z.string().nullable().optional(),
+  qualification: LeadQualificationEnum.optional(),
+  qualificationReason: z.string().nullable().optional(),
+  contactPending: z.boolean().optional(),
   leadStatus: LeadStatusEnum.optional(),
   statusReason: z.string().optional(),
   missingDetails: z.array(z.string()).optional(),

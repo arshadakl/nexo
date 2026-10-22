@@ -6,6 +6,7 @@ import type {
   ConversationStatus,
   ConversationAIMode,
 } from '@shared/types/crm.types';
+import { AUTOMATION_STATE_SQL } from '../services/conversationAutomation';
 
 export interface ConversationListFilters {
   channel?: (ChannelType | 'all') | undefined;
@@ -45,7 +46,10 @@ export class ConversationRepository {
         l.residency_intent AS lead_intent,
         l.lead_status,
         l.status_reason,
-        l.missing_details_json
+        l.missing_details_json,
+        l.qualification AS lead_qualification,
+        l.qualification_reason AS lead_qualification_reason,
+        ${AUTOMATION_STATE_SQL} AS automation_state
       FROM conversations c
       LEFT JOIN (
         SELECT lead_id, conversation_id, ROW_NUMBER() OVER (PARTITION BY conversation_id ORDER BY linked_at DESC) as rn
@@ -67,9 +71,9 @@ export class ConversationRepository {
       bindings.push(filters.status);
     }
 
+    // "takeover" filters on conversations a person must act on: explicit takeover or unresolved approval.
     if (filters.takeover !== undefined) {
-      query += ' AND c.human_takeover = ?';
-      bindings.push(filters.takeover ? 1 : 0);
+      query += ` AND (${AUTOMATION_STATE_SQL}) ${filters.takeover ? 'IN' : 'NOT IN'} ('human_takeover', 'approval_pending', 'approval_sending', 'send_failed')`;
     }
 
     if (filters.search) {
@@ -94,6 +98,7 @@ export class ConversationRepository {
       humanTakeover: Boolean(row.human_takeover === 1),
       aiMode: row.ai_mode,
       status: row.status,
+      automationState: row.automation_state || 'ai_active',
       lead: row.lead_id
         ? {
             id: row.lead_id,
@@ -110,6 +115,8 @@ export class ConversationRepository {
                 return [];
               }
             })(),
+            qualification: row.lead_qualification || 'unknown',
+            qualificationReason: row.lead_qualification_reason || null,
           }
         : null,
     }));
@@ -141,7 +148,10 @@ export class ConversationRepository {
         l.residency_intent AS lead_intent,
         l.lead_status,
         l.status_reason,
-        l.missing_details_json
+        l.missing_details_json,
+        l.qualification AS lead_qualification,
+        l.qualification_reason AS lead_qualification_reason,
+        ${AUTOMATION_STATE_SQL} AS automation_state
       FROM conversations c
       LEFT JOIN (
         SELECT lead_id, conversation_id, ROW_NUMBER() OVER (PARTITION BY conversation_id ORDER BY linked_at DESC) as rn
@@ -178,6 +188,7 @@ export class ConversationRepository {
       humanTakeover: Boolean(row.human_takeover === 1),
       aiMode: row.ai_mode,
       status: row.status,
+      automationState: row.automation_state || 'ai_active',
       createdAt: Number(row.created_at),
       updatedAt: Number(row.updated_at),
       lead: row.lead_id
@@ -196,6 +207,8 @@ export class ConversationRepository {
                 return [];
               }
             })(),
+            qualification: row.lead_qualification || 'unknown',
+            qualificationReason: row.lead_qualification_reason || null,
           }
         : null,
     };
@@ -240,6 +253,48 @@ export class ConversationRepository {
       errorMessage: row.error_message || null,
       createdAt: Number(row.created_at),
     }));
+  }
+
+  /**
+   * Persists an inbound customer message once (idempotent on provider_message_id).
+   * created_at uses the provider timestamp so rapidly consecutive messages keep their order.
+   */
+  async insertInboundMessage(
+    db: D1Database,
+    params: {
+      tenantId: string;
+      conversationId: string;
+      providerMessageId: string;
+      senderId: string;
+      messageText: string;
+      messageType?: string | undefined;
+      attachments?: unknown[] | undefined;
+      timestamp?: number | undefined;
+    }
+  ): Promise<boolean> {
+    const createdAt = params.timestamp && params.timestamp > 0 ? params.timestamp : Date.now();
+    const attachments = params.attachments && params.attachments.length > 0 ? params.attachments : null;
+    const result = await db
+      .prepare(
+        `INSERT INTO messages (
+          id, tenant_id, conversation_id, provider_message_id, direction,
+          sender_type, sender_id, message_text, message_type, delivery_status, metadata_json, created_at
+        ) VALUES (?, ?, ?, ?, 'inbound', 'applicant', ?, ?, ?, 'delivered', ?, ?)
+        ON CONFLICT(provider_message_id) DO NOTHING`
+      )
+      .bind(
+        crypto.randomUUID(),
+        params.tenantId,
+        params.conversationId,
+        params.providerMessageId,
+        params.senderId,
+        params.messageText,
+        params.messageType || 'text',
+        attachments ? JSON.stringify({ attachments }) : null,
+        createdAt
+      )
+      .run();
+    return (result.meta?.changes ?? 0) > 0;
   }
 
   /**

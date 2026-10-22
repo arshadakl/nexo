@@ -40,3 +40,25 @@ export interface AnalyticsOverviewResponse {
   conversionFunnel: ConversionFunnelStage[];
   recentActivity: RecentActivityItem[];
 }
+
+export type ActionQueueKind =
+  | 'approval_pending'
+  | 'human_requested'
+  | 'send_failed'
+  | 'qualified_awaiting_contact'
+  | 'unanswered';
+
+/** A conversation someone on the team needs to act on, with why and what to do next. */
+export interface ActionQueueItem {
+  id: string;
+  kind: ActionQueueKind;
+  conversationId: string;
+  customerName: string;
+  customerHandle?: string | null;
+  channel: 'instagram' | 'whatsapp';
+  reason: string;
+  nextAction: string;
+  at: number;
+  qualification?: string | null;
+  automationState: string;
+}

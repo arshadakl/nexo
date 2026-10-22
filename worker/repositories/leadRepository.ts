@@ -6,6 +6,20 @@ import type {
   InternalNote,
 } from '@shared/types/crm.types';
 import type { UpdateLeadSchemaType, CreateLeadSchemaType } from '@shared/schemas/lead.schema';
+import { CONFIRMABLE_FIELDS } from '../lib/leadProfile';
+
+const LEAD_V9_COLUMNS = `current_country, current_city, visa_status, timeline_stated_at, qualification,
+        qualification_reason, contact_pending, confirmed_fields_json, ai_suggestions_json`;
+
+function parseJsonArray<T = string>(value: unknown): T[] {
+  if (typeof value !== 'string' || !value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 export interface LeadListFilters {
   status?: LeadStatus | undefined;
@@ -39,7 +53,7 @@ export class LeadRepository {
         next_action_owner, summary, last_qualified_at, created_at, updated_at,
         current_location, nationality, profession, whatsapp_number,
         whatsapp_same_as_phone, whatsapp_contact_permission,
-        unanswered_questions_json, confusions_json
+        unanswered_questions_json, confusions_json, ${LEAD_V9_COLUMNS}
       FROM leads
       WHERE tenant_id = ?
     `;
@@ -93,7 +107,7 @@ export class LeadRepository {
           next_action_owner, summary, last_qualified_at, created_at, updated_at,
           current_location, nationality, profession, whatsapp_number,
           whatsapp_same_as_phone, whatsapp_contact_permission,
-          unanswered_questions_json, confusions_json
+          unanswered_questions_json, confusions_json, ${LEAD_V9_COLUMNS}
         FROM leads
         WHERE tenant_id = ? AND id = ?`
       )
@@ -246,6 +260,45 @@ export class LeadRepository {
     if (updates.confusions !== undefined) {
       fields.push('confusions_json = ?');
       bindings.push(JSON.stringify(updates.confusions));
+    }
+    if (updates.currentCountry !== undefined) {
+      fields.push('current_country = ?');
+      bindings.push(updates.currentCountry);
+    }
+    if (updates.currentCity !== undefined) {
+      fields.push('current_city = ?');
+      bindings.push(updates.currentCity);
+    }
+    if (updates.visaStatus !== undefined) {
+      fields.push('visa_status = ?');
+      bindings.push(updates.visaStatus);
+    }
+    if (updates.qualification !== undefined) {
+      fields.push('qualification = ?');
+      bindings.push(updates.qualification);
+    }
+    if (updates.qualificationReason !== undefined) {
+      fields.push('qualification_reason = ?');
+      bindings.push(updates.qualificationReason);
+    }
+    if (updates.contactPending !== undefined) {
+      fields.push('contact_pending = ?');
+      bindings.push(updates.contactPending ? 1 : 0);
+    }
+
+    // Profile values edited on the dashboard become confirmed: AI extraction will not replace them.
+    const newlyConfirmed = [...CONFIRMABLE_FIELDS, 'qualification', 'summary', 'nextAction'].filter(
+      (field) => (updates as Record<string, unknown>)[field] !== undefined
+    );
+    if (newlyConfirmed.length > 0) {
+      const current = await db
+        .prepare('SELECT confirmed_fields_json FROM leads WHERE tenant_id = ? AND id = ?')
+        .bind(tenantId, leadId)
+        .first<{ confirmed_fields_json: string | null }>();
+      const confirmed = new Set(parseJsonArray(current?.confirmed_fields_json));
+      newlyConfirmed.forEach((field) => confirmed.add(field));
+      fields.push('confirmed_fields_json = ?');
+      bindings.push(JSON.stringify([...confirmed]));
     }
 
     if (fields.length === 0) {
@@ -470,6 +523,15 @@ export class LeadRepository {
       whatsappContactPermission: row.whatsapp_contact_permission === 1,
       unansweredQuestions,
       confusions,
+      currentCountry: row.current_country || null,
+      currentCity: row.current_city || null,
+      visaStatus: row.visa_status || null,
+      timelineStatedAt: row.timeline_stated_at ? Number(row.timeline_stated_at) : null,
+      qualification: row.qualification || 'unknown',
+      qualificationReason: row.qualification_reason || null,
+      contactPending: row.contact_pending === 1,
+      confirmedFields: parseJsonArray(row.confirmed_fields_json),
+      aiSuggestions: parseJsonArray(row.ai_suggestions_json),
     };
   }
 }

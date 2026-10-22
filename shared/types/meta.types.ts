@@ -62,5 +62,14 @@ export interface NormalizedInboundMessageEvent {
   senderId: string;
   senderName?: string | undefined;
   messageText: string;
+  messageType?: InboundMessageType | undefined;
+  attachments?: InboundAttachment[] | undefined;
   timestamp: number;
+}
+
+export type InboundMessageType = 'text' | 'image' | 'audio' | 'document' | 'unsupported';
+
+export interface InboundAttachment {
+  type: string; // Provider attachment type, e.g. audio, image, video, file, share
+  url?: string | undefined;
 }

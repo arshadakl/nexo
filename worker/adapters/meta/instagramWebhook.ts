@@ -1,4 +1,5 @@
-import type { NormalizedInboundMessageEvent } from '@shared/types/meta.types';
+import type { InboundAttachment, NormalizedInboundMessageEvent } from '@shared/types/meta.types';
+import { classifyAttachments, placeholderText } from '../../lib/inboundContent';
 
 export class InstagramWebhookAdapter {
   /**
@@ -17,24 +18,38 @@ export class InstagramWebhookAdapter {
       const messagingList = Array.isArray(entry.messaging) ? entry.messaging : [];
 
       for (const item of messagingList) {
-        // Only process customer-initiated inbound text/media messages that contain text
-        if (item.message && !item.message.is_echo && item.message.text && String(item.message.text).trim().length > 0) {
-          const providerMessageId = String(item.message.mid || `mid_${Date.now()}_${Math.random()}`);
-          const senderId = String(item.sender?.id || '');
-          const messageText = String(item.message.text).trim();
-          const timestamp = Number(item.timestamp || Date.now());
+        const message = item.message;
+        const senderId = String(item.sender?.id || '');
+        // Skip our own outgoing messages: echoes, and anything the business account itself sent.
+        if (!message || message.is_echo || message.is_deleted || !senderId || senderId === recipientId) continue;
 
-          events.push({
-            eventKey: `ig_msg_${recipientId}_${providerMessageId}`,
-            provider: 'instagram',
-            externalAccountId: recipientId,
-            providerConvoId: `ig_convo_${senderId}_${recipientId}`,
-            providerMessageId,
-            senderId,
-            messageText,
-            timestamp,
-          });
-        }
+        const messageText = typeof message.text === 'string' ? message.text.trim() : '';
+        const attachments: InboundAttachment[] = Array.isArray(message.attachments)
+          ? message.attachments.map((a: any) => ({
+              type: String(a?.type || 'unknown').toLowerCase(),
+              url: typeof a?.payload?.url === 'string' ? a.payload.url : undefined,
+            }))
+          : [];
+        if (message.is_unsupported && attachments.length === 0) attachments.push({ type: 'unsupported' });
+        // Attachment-only messages (voice notes, images) are kept so they can be answered honestly.
+        if (!messageText && attachments.length === 0) continue;
+
+        const messageType = classifyAttachments(attachments);
+        const providerMessageId = String(message.mid || `mid_${Date.now()}_${Math.random()}`);
+        const timestamp = Number(item.timestamp || Date.now());
+
+        events.push({
+          eventKey: `ig_msg_${recipientId}_${providerMessageId}`,
+          provider: 'instagram',
+          externalAccountId: recipientId,
+          providerConvoId: `ig_convo_${senderId}_${recipientId}`,
+          providerMessageId,
+          senderId,
+          messageText: messageText || placeholderText(messageType),
+          messageType,
+          attachments,
+          timestamp,
+        });
       }
     }
 

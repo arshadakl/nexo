@@ -2,7 +2,14 @@ import type {
   MessageDraft,
   CreateDraftInput,
   DraftStatus,
+  DraftReviewKind,
+  DraftContextMessage,
 } from '@shared/types/draft.types';
+
+const DRAFT_COLUMNS = `id, tenant_id, conversation_id, lead_id, suggested_text, rationale,
+                status, modified_text, reviewed_by, reviewed_at, created_at,
+                review_kind, review_reason, customer_question, based_on_message_at,
+                sent_message_id, send_attempts, last_error, updated_at`;
 
 export class DraftRepository {
   /**
@@ -20,8 +27,9 @@ export class DraftRepository {
       .prepare(
         `INSERT INTO message_drafts (
           id, tenant_id, conversation_id, lead_id, suggested_text, rationale,
-          status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'pending_review', ?)`
+          status, created_at, review_kind, review_reason, customer_question,
+          based_on_message_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 'pending_review', ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         id,
@@ -30,6 +38,11 @@ export class DraftRepository {
         input.leadId || null,
         input.suggestedText,
         input.rationale || null,
+        now,
+        input.reviewKind || null,
+        input.reviewReason || null,
+        input.customerQuestion || null,
+        input.basedOnMessageAt ?? null,
         now
       )
       .run();
@@ -49,8 +62,7 @@ export class DraftRepository {
   ): Promise<MessageDraft | null> {
     const row = await db
       .prepare(
-        `SELECT id, tenant_id, conversation_id, lead_id, suggested_text, rationale,
-                status, modified_text, reviewed_by, reviewed_at, created_at
+        `SELECT ${DRAFT_COLUMNS}
          FROM message_drafts
          WHERE tenant_id = ? AND id = ?`
       )
@@ -62,7 +74,8 @@ export class DraftRepository {
   }
 
   /**
-   * Retrieves the latest active pending draft for a specific conversation.
+   * Retrieves the latest unresolved draft (awaiting review, sending, or failed to send) for a
+   * conversation, with any customer messages that arrived after it was written.
    */
   async getPendingDraft(
     db: D1Database,
@@ -71,10 +84,9 @@ export class DraftRepository {
   ): Promise<MessageDraft | null> {
     const row = await db
       .prepare(
-        `SELECT id, tenant_id, conversation_id, lead_id, suggested_text, rationale,
-                status, modified_text, reviewed_by, reviewed_at, created_at
+        `SELECT ${DRAFT_COLUMNS}
          FROM message_drafts
-         WHERE tenant_id = ? AND conversation_id = ? AND status = 'pending_review'
+         WHERE tenant_id = ? AND conversation_id = ? AND status IN ('pending_review', 'sending', 'send_failed')
          ORDER BY created_at DESC
          LIMIT 1`
       )
@@ -82,7 +94,32 @@ export class DraftRepository {
       .first<any>();
 
     if (!row) return null;
-    return this.mapRowToDraft(row);
+    const draft = this.mapRowToDraft(row);
+    draft.newInboundMessages = await this.listInboundSince(db, conversationId, draft.basedOnMessageAt ?? null);
+    return draft;
+  }
+
+  /** Inbound customer messages newer than `since` (none when the draft predates this tracking). */
+  async listInboundSince(
+    db: D1Database,
+    conversationId: string,
+    since: number | null
+  ): Promise<DraftContextMessage[]> {
+    if (since === null) return [];
+    const rows = await db
+      .prepare(
+        `SELECT id, message_text, message_type, created_at FROM messages
+         WHERE conversation_id = ? AND direction = 'inbound' AND created_at > ?
+         ORDER BY created_at ASC, id ASC LIMIT 20`
+      )
+      .bind(conversationId, since)
+      .all<any>();
+    return (rows.results || []).map((r) => ({
+      id: r.id,
+      messageText: r.message_text,
+      messageType: r.message_type,
+      createdAt: Number(r.created_at),
+    }));
   }
 
   /**
@@ -96,10 +133,9 @@ export class DraftRepository {
   ): Promise<MessageDraft[]> {
     const rows = await db
       .prepare(
-        `SELECT id, tenant_id, conversation_id, lead_id, suggested_text, rationale,
-                status, modified_text, reviewed_by, reviewed_at, created_at
+        `SELECT ${DRAFT_COLUMNS}
          FROM message_drafts
-         WHERE tenant_id = ? AND status = 'pending_review'
+         WHERE tenant_id = ? AND status IN ('pending_review', 'sending', 'send_failed')
          ORDER BY created_at DESC
          LIMIT ? OFFSET ?`
       )
@@ -150,6 +186,14 @@ export class DraftRepository {
       reviewedBy: row.reviewed_by || null,
       reviewedAt: row.reviewed_at ? Number(row.reviewed_at) : null,
       createdAt: Number(row.created_at),
+      updatedAt: row.updated_at ? Number(row.updated_at) : null,
+      reviewKind: (row.review_kind as DraftReviewKind) || null,
+      reviewReason: row.review_reason || null,
+      customerQuestion: row.customer_question || null,
+      basedOnMessageAt: row.based_on_message_at != null ? Number(row.based_on_message_at) : null,
+      sentMessageId: row.sent_message_id || null,
+      sendAttempts: Number(row.send_attempts || 0),
+      lastError: row.last_error || null,
     };
   }
 }

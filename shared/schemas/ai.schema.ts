@@ -5,7 +5,20 @@ import {
   ResidencyIntentEnum,
   LocationContextEnum,
   ContactMethodPreferenceEnum,
+  LeadQualificationEnum,
 } from './lead.schema';
+
+const lowerSnake = (value: unknown) =>
+  typeof value === 'string' ? value.trim().toLowerCase().replace(/[\s/-]+/g, '_') : value;
+
+// Optional enrichment fields degrade to null instead of failing the whole (fail-closed) parse.
+const DraftReviewKindEnum = z.enum([
+  'business_confirmation',
+  'human_requested',
+  'policy_block',
+  'model_fallback',
+  'ai_review',
+]);
 
 export const AIQualificationResultSchema = z.object({
   intent: z
@@ -44,6 +57,10 @@ export const AIQualificationResultSchema = z.object({
       whatsappNumber: z.string().nullable().optional(),
       whatsappSameAsPhone: z.boolean().nullable().optional(),
       whatsappContactPermission: z.boolean().nullable().optional(),
+      currentCountry: z.string().nullable().optional(),
+      currentCity: z.string().nullable().optional(),
+      visaStatus: z.string().nullable().optional(),
+      contactPending: z.boolean().nullable().optional(),
 
       // Compatibility fallback
       phoneNumber: z.string().nullable().optional(),
@@ -66,6 +83,14 @@ export const AIQualificationResultSchema = z.object({
   humanReviewRequired: z.boolean().default(false),
   humanReviewReason: z.string().nullable().optional(),
   safetyFlags: z.array(z.string()).default([]),
+  qualification: z.preprocess(lowerSnake, LeadQualificationEnum).nullable().optional().catch(null),
+  qualificationReason: z.string().nullable().optional().catch(null),
+  needSummary: z.string().nullable().optional().catch(null),
+  nextAction: z.string().nullable().optional().catch(null),
+  reviewKind: z.preprocess(lowerSnake, DraftReviewKindEnum).nullable().optional().catch(null),
+  reviewerMustConfirm: z.string().nullable().optional().catch(null),
+  customerQuestion: z.string().nullable().optional().catch(null),
+  ambiguousStatements: z.array(z.string()).default([]).catch([]),
 });
 
 export type AIQualificationResultSchemaType = z.infer<typeof AIQualificationResultSchema>;

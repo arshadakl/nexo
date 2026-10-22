@@ -82,7 +82,8 @@ export interface AIProviderPreset {
   customHeaders?: Record<string, string> | undefined;
 }
 
-import type { LeadStatus, ServiceVertical, ResidencyIntent, LocationContext, ContactMethodPreference } from './crm.types';
+import type { LeadStatus, ServiceVertical, ResidencyIntent, LocationContext, ContactMethodPreference, LeadQualification } from './crm.types';
+import type { DraftReviewKind } from './draft.types';
 
 export interface AIQualificationResult {
   intent: 'residency' | 'business_setup' | 'both' | 'general_enquiry' | 'human_request' | 'support_status' | 'outside_scope_request' | 'outside_scope_spam' | 'unknown';
@@ -109,6 +110,10 @@ export interface AIQualificationResult {
     whatsappNumber?: string | undefined;
     whatsappSameAsPhone?: boolean | undefined;
     whatsappContactPermission?: boolean | undefined;
+    currentCountry?: string | undefined;
+    currentCity?: string | undefined;
+    visaStatus?: string | undefined;
+    contactPending?: boolean | undefined;
 
     // Legacy fallback compatibility
     phoneNumber?: string | undefined;
@@ -128,5 +133,13 @@ export interface AIQualificationResult {
   humanReviewRequired: boolean;
   humanReviewReason?: string | undefined;
   safetyFlags: string[];
+  qualification?: LeadQualification | null;
+  qualificationReason?: string | null;
+  needSummary?: string | null;
+  nextAction?: string | null;
+  reviewKind?: DraftReviewKind | null;
+  reviewerMustConfirm?: string | null;
+  customerQuestion?: string | null;
+  ambiguousStatements?: string[];
 }
 
