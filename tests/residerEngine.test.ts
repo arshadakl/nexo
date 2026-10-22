@@ -124,6 +124,48 @@ describe('RESIDER Conversational Engine & Specification Scenarios', () => {
     const parsedMl = AIQualificationResultSchema.parse(mlGreetingOutput);
     expect(parsedMl.replyText).toBe('ഹായ് 👋 എന്താണ് അറിയേണ്ടത്?');
     expect(parsedMl.language).toBe('ml');
+
+    // Real output returned by LLM with explicit nulls in extractedFields and humanReviewReason
+    const realLlmGreeting = {
+      intent: 'general_enquiry',
+      language: 'en',
+      toneMirroring: 'polite_standard',
+      replyText: 'Hey! 👋 Welcome to Resider. Are you interested in a 2‑year freelancer/founder residency visa, or are you looking to set up a business in the UAE?',
+      rationale: 'Greet the user and ask a single bridge question to determine if they are exploring residency or business setup, per intake flow.',
+      extractedFields: {
+        fullName: null,
+        phoneOrEmail: null,
+        currentLocation: null,
+        nationality: null,
+        profession: null,
+        whatsappNumber: null,
+        whatsappSameAsPhone: null,
+        whatsappContactPermission: null,
+        serviceVertical: 'unspecified',
+        residencyIntent: 'unspecified',
+        workBusinessActivity: null,
+        uaeLocationContext: 'unknown',
+        targetEmirate: null,
+        timeline: null,
+        contactMethodPreference: null,
+        contactPermission: null,
+        externalSharingPermission: null
+      },
+      missingFields: ['fullName', 'phoneOrEmail', 'currentLocation', 'nationality', 'profession', 'targetEmirate', 'timeline'],
+      questionsAnswered: [],
+      unansweredQuestions: [],
+      confusions: [],
+      leadStatus: 'needs_clarification',
+      statusReason: 'User intent is not yet clear; need to determine if they are interested in residency or business setup.',
+      humanReviewRequired: false,
+      humanReviewReason: null,
+      safetyFlags: []
+    };
+    const parsedReal = AIQualificationResultSchema.safeParse(realLlmGreeting);
+    if (!parsedReal.success) {
+      console.log('ISSUES:', JSON.stringify(parsedReal.error.issues, null, 2));
+    }
+    expect(parsedReal.success).toBe(true);
   });
 
   it('Scenario 3: General Enquiry explains both services and asks which is needed', () => {

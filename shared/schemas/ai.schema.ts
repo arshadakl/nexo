@@ -27,17 +27,17 @@ export const AIQualificationResultSchema = z.object({
   rationale: z.string().nullable().optional(),
   extractedFields: z
     .object({
-      fullName: z.string().optional(),
-      phoneOrEmail: z.string().optional(),
-      serviceVertical: ServiceVerticalEnum.optional(),
-      residencyIntent: ResidencyIntentEnum.optional(),
-      workBusinessActivity: z.string().optional(),
-      uaeLocationContext: LocationContextEnum.optional(),
-      targetEmirate: z.string().optional(),
-      timeline: z.string().optional(),
-      contactMethodPreference: ContactMethodPreferenceEnum.optional(),
-      contactPermission: z.boolean().optional(),
-      externalSharingPermission: z.boolean().optional(),
+      fullName: z.string().nullable().optional(),
+      phoneOrEmail: z.string().nullable().optional(),
+      serviceVertical: ServiceVerticalEnum.nullable().optional(),
+      residencyIntent: ResidencyIntentEnum.nullable().optional(),
+      workBusinessActivity: z.string().nullable().optional(),
+      uaeLocationContext: LocationContextEnum.nullable().optional(),
+      targetEmirate: z.string().nullable().optional(),
+      timeline: z.string().nullable().optional(),
+      contactMethodPreference: ContactMethodPreferenceEnum.nullable().optional(),
+      contactPermission: z.boolean().nullable().optional(),
+      externalSharingPermission: z.boolean().nullable().optional(),
       currentLocation: z.string().nullable().optional(),
       nationality: z.string().nullable().optional(),
       profession: z.string().nullable().optional(),
@@ -46,7 +46,7 @@ export const AIQualificationResultSchema = z.object({
       whatsappContactPermission: z.boolean().nullable().optional(),
 
       // Compatibility fallback
-      phoneNumber: z.string().optional(),
+      phoneNumber: z.string().nullable().optional(),
     })
     .default({}),
   fieldConfidence: z.record(z.number().min(0).max(1)).default({}),
@@ -64,7 +64,7 @@ export const AIQualificationResultSchema = z.object({
     })
     .optional(),
   humanReviewRequired: z.boolean().default(false),
-  humanReviewReason: z.string().optional(),
+  humanReviewReason: z.string().nullable().optional(),
   safetyFlags: z.array(z.string()).default([]),
 });
 
