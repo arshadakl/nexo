@@ -6,7 +6,6 @@ import {
   Bot,
   Zap,
   Settings,
-  UserCheck,
   ArrowUpRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -30,7 +29,6 @@ export function Sidebar({
       items: [
         { key: 'inbox' as const, label: 'Inbox', icon: Inbox },
         { key: 'leads' as const, label: 'Leads', icon: Users },
-        { key: 'experts' as const, label: 'Partners', icon: UserCheck },
         { key: 'overview' as const, label: 'Overview', icon: LayoutDashboard },
       ],
     },

@@ -6,6 +6,8 @@
 -- Ensure fallback tenant exists
 INSERT OR IGNORE INTO tenants (id, name, slug, status, created_at, updated_at)
 VALUES ('tenant_default', 'Resider Advisory Default', 'resider-default', 'active', 1700000000000, 1700000000000);
+INSERT OR IGNORE INTO tenants (id, name, slug, status, created_at, updated_at)
+VALUES ('tenant_visa_horizon_default', 'Visa Horizon Default', 'visa-horizon-default', 'active', 1700000000000, 1700000000000);
 
 -- 1. Initial Verified Consulting Partners for Business Setup
 INSERT OR IGNORE INTO verified_experts (

@@ -30,13 +30,13 @@ export class AnalyticsService {
       .prepare(
         `SELECT 
           COUNT(*) as total_leads,
-          SUM(CASE WHEN status IN ('ready_for_team', 'handed_over') THEN 1 ELSE 0 END) as qualified_leads,
-          SUM(CASE WHEN status IN ('handover_requested', 'needs_clarification') THEN 1 ELSE 0 END) as review_leads,
-          SUM(CASE WHEN status = 'needs_clarification' THEN 1 ELSE 0 END) as clarification_leads,
-          SUM(CASE WHEN status = 'exploring' THEN 1 ELSE 0 END) as exploring_leads,
-          SUM(CASE WHEN status = 'ready_for_team' THEN 1 ELSE 0 END) as ready_leads,
-          SUM(CASE WHEN status = 'handed_over' THEN 1 ELSE 0 END) as handed_over_leads,
-          SUM(CASE WHEN status = 'support_enquiry' THEN 1 ELSE 0 END) as support_leads
+          SUM(CASE WHEN lead_status IN ('ready_for_team', 'handed_over') THEN 1 ELSE 0 END) as qualified_leads,
+          SUM(CASE WHEN lead_status IN ('handover_requested', 'needs_clarification') THEN 1 ELSE 0 END) as review_leads,
+          SUM(CASE WHEN lead_status = 'needs_clarification' THEN 1 ELSE 0 END) as clarification_leads,
+          SUM(CASE WHEN lead_status = 'exploring' THEN 1 ELSE 0 END) as exploring_leads,
+          SUM(CASE WHEN lead_status = 'ready_for_team' THEN 1 ELSE 0 END) as ready_leads,
+          SUM(CASE WHEN lead_status = 'handed_over' THEN 1 ELSE 0 END) as handed_over_leads,
+          SUM(CASE WHEN lead_status = 'support_enquiry' THEN 1 ELSE 0 END) as support_leads
         FROM leads
         WHERE tenant_id = ?`
       )
@@ -124,7 +124,7 @@ export class AnalyticsService {
     // 7. Recent Activity Timeline
     const recentLeads = await db
       .prepare(
-        `SELECT id, full_name, service_vertical, status, updated_at
+        `SELECT id, full_name, service_vertical, lead_status, updated_at
          FROM leads
          WHERE tenant_id = ?
          ORDER BY updated_at DESC
@@ -135,10 +135,10 @@ export class AnalyticsService {
 
     const recentActivity = (recentLeads.results || []).map((l) => ({
       id: l.id,
-      type: (l.status === 'ready_for_team' || l.status === 'handed_over')
+      type: (l.lead_status === 'ready_for_team' || l.lead_status === 'handed_over')
         ? ('qualified' as const)
         : ('new_lead' as const),
-      title: `${l.full_name || 'Customer'} (${String(l.status || '').replace(/_/g, ' ')})`,
+      title: `${l.full_name || 'Customer'} (${String(l.lead_status || '').replace(/_/g, ' ')})`,
       description: `Inquired about ${l.service_vertical === 'business_setup' ? 'UAE Business Setup' : l.service_vertical === 'both' ? 'Residency & Setup' : 'UAE Residency'}`,
       timestamp: Number(l.updated_at),
     }));

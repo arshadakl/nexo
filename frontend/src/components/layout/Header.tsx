@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { LogOut, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useAuth } from '@/lib/AuthContext';
 import type { NavItemKey } from './Sidebar';
 
 const titles: Record<NavItemKey, string> = {
   inbox: 'Inbox',
   leads: 'Leads',
-  experts: 'Partners',
   overview: 'Overview',
   'ai-automation': 'AI & knowledge',
   integrations: 'Channels',
@@ -38,7 +38,8 @@ export function Header({
         </Button>
         <h1 className="truncate text-sm font-semibold">{titles[currentTab]}</h1>
       </div>
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <ThemeToggle />
         <span className="hidden max-w-60 truncate text-xs text-muted-foreground sm:inline">
           {user?.email}
         </span>

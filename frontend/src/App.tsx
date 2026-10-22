@@ -5,7 +5,6 @@ import type { NavItemKey } from './components/layout/Sidebar';
 import { OverviewView } from './views/OverviewView';
 import { InboxView } from './views/InboxView';
 import { LeadsView } from './views/LeadsView';
-import { ExpertsView } from './views/ExpertsView';
 import { AIAutomationView } from './views/AIAutomationView';
 import { IntegrationsView } from './views/IntegrationsView';
 import { SettingsView } from './views/SettingsView';
@@ -14,6 +13,7 @@ import { AuthProvider, useAuth } from './lib/AuthContext';
 import { useNavigation } from './hooks/useNavigation';
 import { inboxHref, navigate, screenPaths } from './lib/navigation';
 import { ComposerProvider } from './lib/ComposerContext';
+import { ThemeProvider } from './lib/ThemeContext';
 
 function Dashboard() {
   const route = useNavigation();
@@ -54,8 +54,6 @@ function Dashboard() {
             onNavigateToInbox={handleNavigateToInbox}
           />
         );
-      case 'experts':
-        return <ExpertsView route={route} />;
       case 'ai-automation':
         return <AIAutomationView />;
       case 'integrations':
@@ -100,9 +98,11 @@ function MainContent() {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <MainContent />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <MainContent />
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

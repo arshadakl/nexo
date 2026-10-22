@@ -5,7 +5,7 @@ describe('Workspace URL state', () => {
   it('defaults to Inbox and validates unknown screens and channels', () => {
     expect(parseRoute('/').screen).toBe('inbox');
     expect(parseRoute('/unknown?channel=not-a-channel').channel).toBe('all');
-    expect(parseRoute('/partners').screen).toBe('experts');
+    expect(parseRoute('/partners').screen).toBe('leads');
     expect(parseRoute('/channels').screen).toBe('integrations');
   });
   it('round-trips customer IDs and filters without altering their values', () => {

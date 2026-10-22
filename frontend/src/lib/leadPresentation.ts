@@ -4,9 +4,10 @@ export const leadLabels: Record<LeadStatus, string> = {
   needs_clarification: 'Needs clarification',
   exploring: 'Exploring',
   ready_for_team: 'Ready for team',
-  handover_requested: 'Handover requested',
-  handed_over: 'Handed over',
+  handover_requested: 'Needs Human Hand',
+  handed_over: 'Staff Handled',
   support_enquiry: 'Support enquiry',
+  outside_scope_request: 'Outside scope request',
   outside_scope_spam: 'Outside scope / spam',
 };
 export function humanize(value: string | null | undefined) {

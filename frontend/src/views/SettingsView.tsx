@@ -1,6 +1,7 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/lib/AuthContext';
-import { ShieldCheck, User, Building2 } from 'lucide-react';
+import { ShieldCheck, User, Building2, Sun } from 'lucide-react';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 export function SettingsView() {
   const { user } = useAuth();
@@ -55,6 +56,29 @@ export function SettingsView() {
                 {user?.tenantId || 'default'}
               </span>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-surface-panel border-border">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold text-content-primary flex items-center gap-2">
+            <Sun className="w-4 h-4 text-accent" aria-hidden="true" />
+            Appearance & theme
+          </CardTitle>
+          <CardDescription className="text-xs text-content-secondary mt-0.5">
+            Choose your preferred workspace visual theme or sync with your system preference.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-md border border-border bg-surface-base">
+            <div>
+              <p className="font-medium text-content-primary">Theme preference</p>
+              <p className="text-[11px] text-content-secondary">
+                Switch between Light, Dark, or System automated color schemes.
+              </p>
+            </div>
+            <ThemeToggle variant="compact" />
           </div>
         </CardContent>
       </Card>

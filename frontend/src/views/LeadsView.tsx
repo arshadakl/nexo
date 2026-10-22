@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLeads } from '@/hooks/useLeads';
-import { LeadDrawer } from '@/components/leads/LeadDrawer';
+import { LeadModal } from '@/components/leads/LeadModal';
 import { humanize, leadLabels } from '@/lib/leadPresentation';
 import { absoluteTime } from '@/lib/formatDate';
 import { leadsHref, navigate, type WorkspaceRoute } from '@/lib/navigation';
@@ -152,10 +152,12 @@ export function LeadsView({ route, onNavigateToInbox }: LeadsViewProps = {}) {
           <thead className="sticky top-0 z-10 bg-surface-base border-b border-border text-content-secondary text-[11px] uppercase tracking-wider font-medium">
             <tr>
               <th className="px-4 py-2.5">Customer</th>
-              <th className="px-4 py-2.5">Vertical & intent</th>
-              <th className="px-4 py-2.5">Activity & location</th>
+              <th className="px-4 py-2.5">Service & intent</th>
+              <th className="px-4 py-2.5">Current location</th>
+              <th className="px-4 py-2.5">Phone & WhatsApp</th>
+              <th className="px-4 py-2.5">Emirate & timing</th>
+              <th className="px-4 py-2.5">Customer permissions</th>
               <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Missing details</th>
               <th className="px-4 py-2.5">Last active</th>
               <th className="px-4 py-2.5 text-right"><span className="sr-only">Actions</span></th>
             </tr>
@@ -164,30 +166,33 @@ export function LeadsView({ route, onNavigateToInbox }: LeadsViewProps = {}) {
             {isLoading ? (
               [1, 2, 3, 4, 5].map((i) => (
                 <tr key={i}>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
-                  <td className="px-4 py-3 text-right"><Skeleton className="h-4 w-8 ml-auto" /></td>
+                  <td className="px-4 py-3 text-right"><Skeleton className="h-4 w-6 ml-auto" /></td>
                 </tr>
               ))
             ) : isError ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-danger">
+                <td colSpan={9} className="p-8 text-center text-danger">
                   Could not load leads. Please check your connection and retry.
                 </td>
               </tr>
             ) : leads && leads.length > 0 ? (
               leads.map((lead) => {
-                const missingCount = lead.missingDetails?.filter(Boolean).length || 0;
+                const isNeedsHand = lead.leadStatus === 'handover_requested' || lead.leadStatus === 'support_enquiry';
                 return (
                   <tr
                     key={lead.id}
                     className="hover:bg-surface-hover/70 transition-colors group cursor-pointer"
                     onClick={() => handleSelectLead(lead.id)}
                   >
+                    {/* Customer Name */}
                     <td className="px-4 py-3">
                       <button
                         type="button"
@@ -199,54 +204,107 @@ export function LeadsView({ route, onNavigateToInbox }: LeadsViewProps = {}) {
                       >
                         {lead.fullName || 'Anonymous customer'}
                       </button>
-                      {(lead.phoneOrEmail || lead.phoneNumber) && (
-                        <div className="text-[11px] text-content-secondary font-mono mt-0.5">
-                          {lead.phoneOrEmail || lead.phoneNumber}
-                        </div>
-                      )}
+                      <div className="text-[11px] text-content-secondary mt-0.5">
+                        {lead.profession || lead.workBusinessActivity || 'Activity pending'}
+                      </div>
                     </td>
+
+                    {/* Service & Intent */}
                     <td className="px-4 py-3">
-                      <div className="text-content-primary">
+                      <div className="text-content-primary font-medium">
                         {humanize(lead.serviceVertical)}
                       </div>
                       <div className="text-[11px] text-content-secondary">
                         {lead.residencyIntent ? humanize(lead.residencyIntent) : '—'}
                       </div>
                     </td>
+
+                    {/* Current Location & Nationality */}
                     <td className="px-4 py-3">
                       <div className="text-content-primary">
-                        {lead.workBusinessActivity || 'Pending'}
+                        {lead.currentLocation || humanize(lead.uaeLocationContext)}
+                      </div>
+                      {lead.nationality && (
+                        <div className="text-[11px] text-content-secondary">
+                          {lead.nationality}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Phone & WhatsApp */}
+                    <td className="px-4 py-3">
+                      <div className="font-mono text-content-primary text-[11px]">
+                        {lead.phoneOrEmail || lead.phoneNumber || '—'}
+                      </div>
+                      {lead.whatsappNumber && lead.whatsappNumber !== lead.phoneOrEmail && (
+                        <div className="text-[10px] text-success font-mono mt-0.5">
+                          WA: {lead.whatsappNumber}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Target Emirate & Timing */}
+                    <td className="px-4 py-3">
+                      <div className="text-content-primary">
+                        {lead.targetEmirate || 'Undecided'}
                       </div>
                       <div className="text-[11px] text-content-secondary">
-                        {lead.targetEmirate || humanize(lead.uaeLocationContext)}
+                        {lead.timeline || 'Undecided timing'}
                       </div>
                     </td>
+
+                    {/* Customer Permissions */}
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center text-xs font-medium text-content-primary">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {lead.contactPermission ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-success/15 text-success font-medium">
+                            Call OK
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-surface-raised text-muted-foreground">
+                            Call pending
+                          </span>
+                        )}
+
+                        {lead.whatsappContactPermission || lead.contactPermission ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-success/15 text-success font-medium">
+                            WhatsApp OK
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-surface-raised text-muted-foreground">
+                            WA pending
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                          isNeedsHand
+                            ? 'bg-warning/15 text-warning border border-warning/30'
+                            : lead.leadStatus === 'ready_for_team'
+                            ? 'bg-success/15 text-success border border-success/30'
+                            : 'text-content-primary'
+                        }`}
+                      >
                         {leadLabels[lead.leadStatus]}
                       </span>
                       {lead.statusReason && (
-                        <div className="text-[11px] text-content-secondary truncate max-w-[160px] mt-0.5" title={lead.statusReason}>
+                        <div className="text-[11px] text-content-secondary truncate max-w-[150px] mt-0.5" title={lead.statusReason}>
                           {lead.statusReason}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      {missingCount > 0 ? (
-                        <span className="text-[11px] text-warning font-medium">
-                          {missingCount} detail{missingCount > 1 ? 's' : ''} missing
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-success">
-                          Complete
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-content-secondary text-[11px]">
+
+                    {/* Last active */}
+                    <td className="px-4 py-3 text-content-secondary text-[11px] whitespace-nowrap">
                       <time dateTime={new Date(lead.updatedAt).toISOString()}>
                         {absoluteTime(lead.updatedAt)}
                       </time>
                     </td>
+
                     <td className="px-4 py-3 text-right">
                       <ChevronRight className="w-4 h-4 text-content-secondary group-hover:text-content-primary ml-auto" aria-hidden="true" />
                     </td>
@@ -255,7 +313,7 @@ export function LeadsView({ route, onNavigateToInbox }: LeadsViewProps = {}) {
               })
             ) : (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-content-secondary">
+                <td colSpan={9} className="p-8 text-center text-content-secondary">
                   <p className="font-medium text-sm text-content-primary">No leads found matching your criteria</p>
                   <p className="text-xs mt-1">
                     As inbound customer conversations occur, Resider automatically qualifies and lists profiles here.
@@ -267,8 +325,8 @@ export function LeadsView({ route, onNavigateToInbox }: LeadsViewProps = {}) {
         </table>
       </div>
 
-      {/* Slide-out Lead Drawer */}
-      <LeadDrawer
+      {/* Full Lead Modal */}
+      <LeadModal
         leadId={selectedLeadId}
         onClose={() => handleSelectLead(null)}
         onNavigateToInbox={onNavigateToInbox}

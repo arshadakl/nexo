@@ -73,6 +73,8 @@ describe('RESIDER Lead Repository & Schemas', () => {
       '%freelance%',
       '%freelance%',
       '%freelance%',
+      '%freelance%',
+      '%freelance%',
       50,
       0
     );

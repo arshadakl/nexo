@@ -13,13 +13,11 @@ describe('Leads and Partners URL routing', () => {
     expect(parsed.search).toBe('consulting');
   });
 
-  it('encodes and parses partner sector filter', () => {
-    const url = partnersHref({ sector: 'tech', search: 'shaji' });
-    expect(url).toBe('/partners?sector=tech&search=shaji');
+  it('redirects /partners to leads screen', () => {
+    const url = partnersHref();
+    expect(url).toBe('/leads');
 
-    const parsed = parseRoute(url);
-    expect(parsed.screen).toBe('experts');
-    expect(parsed.partnerSector).toBe('tech');
-    expect(parsed.search).toBe('shaji');
+    const parsed = parseRoute('/partners');
+    expect(parsed.screen).toBe('leads');
   });
 });

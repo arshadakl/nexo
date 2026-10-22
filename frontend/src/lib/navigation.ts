@@ -1,7 +1,6 @@
 export const screenPaths = {
   inbox: '/inbox',
   leads: '/leads',
-  experts: '/partners',
   overview: '/overview',
   'ai-automation': '/ai',
   integrations: '/channels',
@@ -18,13 +17,14 @@ export interface WorkspaceRoute {
   humanOnly: boolean;
   leadId: string | null;
   leadStatus: string | null;
-  partnerSector: string | null;
+  partnerSector?: string | null;
 }
 
 export function parseRoute(location: string): WorkspaceRoute {
   const url = new URL(location, 'http://workspace.local');
+  const pathname = url.pathname === '/partners' ? '/leads' : url.pathname;
   const screen =
-    (Object.keys(screenPaths) as NavItemKey[]).find((key) => screenPaths[key] === url.pathname) ??
+    (Object.keys(screenPaths) as NavItemKey[]).find((key) => screenPaths[key] === pathname) ??
     'inbox';
   const channel = url.searchParams.get('channel');
   return {
@@ -35,7 +35,6 @@ export function parseRoute(location: string): WorkspaceRoute {
     humanOnly: url.searchParams.get('view') === 'human',
     leadId: url.searchParams.get('lead') || null,
     leadStatus: url.searchParams.get('status') || null,
-    partnerSector: url.searchParams.get('sector') || null,
   };
 }
 
@@ -61,12 +60,9 @@ export function leadsHref(
 }
 
 export function partnersHref(
-  route: { sector?: string | null; search?: string },
+  _route?: { sector?: string | null; search?: string },
 ): string {
-  const params = new URLSearchParams();
-  if (route.sector && route.sector !== 'all') params.set('sector', route.sector);
-  if (route.search) params.set('search', route.search);
-  return `/partners${params.size ? `?${params}` : ''}`;
+  return '/leads';
 }
 
 export function navigate(href: string, replace = false) {

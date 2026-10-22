@@ -3,7 +3,46 @@
 @tailwind utilities;
 
 @layer base {
-  :root,
+  :root {
+    color-scheme: light;
+    --surface-base: 210 20% 98%;
+    --surface-sidebar: 210 20% 95.5%;
+    --surface-panel: 0 0% 100%;
+    --surface-raised: 210 20% 99%;
+    --surface-hover: 210 16% 92.5%;
+    --surface-selected: 215 25% 88%;
+    --text-primary: 215 25% 12%;
+    --text-secondary: 215 16% 36%;
+    --text-muted: 215 14% 52%;
+    --border-subtle: 214 20% 88%;
+    --border-control: 215 16% 75%;
+    --success: 149 50% 36%;
+    --warning: 38 75% 42%;
+    --danger: 354 70% 50%;
+
+    /* Compatibility aliases keep existing screens usable during migration. */
+    --background: var(--surface-base);
+    --foreground: var(--text-primary);
+    --card: var(--surface-panel);
+    --card-foreground: var(--text-primary);
+    --popover: var(--surface-raised);
+    --popover-foreground: var(--text-primary);
+    --primary: 234.19 80% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: var(--surface-hover);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--surface-hover);
+    --muted-foreground: var(--text-muted);
+    --accent: var(--surface-hover);
+    --accent-foreground: var(--text-primary);
+    --destructive: var(--danger);
+    --destructive-foreground: 0 0% 100%;
+    --border: var(--border-subtle);
+    --input: var(--border-control);
+    --ring: var(--primary);
+    --radius: 0.5rem;
+  }
+
   .dark {
     color-scheme: dark;
     --surface-base: 180 11.11% 3.53%;

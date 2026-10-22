@@ -36,7 +36,10 @@ export class LeadRepository {
         detected_language, contact_method_preference, contact_permission,
         external_sharing_permission, lead_status, status_reason, missing_details_json,
         questions_answered_json, assigned_expert_id, owner_id, next_action,
-        next_action_owner, summary, last_qualified_at, created_at, updated_at
+        next_action_owner, summary, last_qualified_at, created_at, updated_at,
+        current_location, nationality, profession, whatsapp_number,
+        whatsapp_same_as_phone, whatsapp_contact_permission,
+        unanswered_questions_json, confusions_json
       FROM leads
       WHERE tenant_id = ?
     `;
@@ -59,8 +62,8 @@ export class LeadRepository {
     }
 
     if (filters.search) {
-      query += ' AND (full_name LIKE ? OR phone_or_email LIKE ? OR work_business_activity LIKE ? OR target_emirate LIKE ? OR summary LIKE ?)';
-      bindings.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
+      query += ' AND (full_name LIKE ? OR phone_or_email LIKE ? OR work_business_activity LIKE ? OR target_emirate LIKE ? OR summary LIKE ? OR current_location LIKE ? OR nationality LIKE ?)';
+      bindings.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
     }
 
     query += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
@@ -87,7 +90,10 @@ export class LeadRepository {
           detected_language, contact_method_preference, contact_permission,
           external_sharing_permission, lead_status, status_reason, missing_details_json,
           questions_answered_json, assigned_expert_id, owner_id, next_action,
-          next_action_owner, summary, last_qualified_at, created_at, updated_at
+          next_action_owner, summary, last_qualified_at, created_at, updated_at,
+          current_location, nationality, profession, whatsapp_number,
+          whatsapp_same_as_phone, whatsapp_contact_permission,
+          unanswered_questions_json, confusions_json
         FROM leads
         WHERE tenant_id = ? AND id = ?`
       )
@@ -209,6 +215,38 @@ export class LeadRepository {
       fields.push('summary = ?');
       bindings.push(updates.summary);
     }
+    if (updates.currentLocation !== undefined) {
+      fields.push('current_location = ?');
+      bindings.push(updates.currentLocation);
+    }
+    if (updates.nationality !== undefined) {
+      fields.push('nationality = ?');
+      bindings.push(updates.nationality);
+    }
+    if (updates.profession !== undefined) {
+      fields.push('profession = ?');
+      bindings.push(updates.profession);
+    }
+    if (updates.whatsappNumber !== undefined) {
+      fields.push('whatsapp_number = ?');
+      bindings.push(updates.whatsappNumber);
+    }
+    if (updates.whatsappSameAsPhone !== undefined) {
+      fields.push('whatsapp_same_as_phone = ?');
+      bindings.push(updates.whatsappSameAsPhone ? 1 : 0);
+    }
+    if (updates.whatsappContactPermission !== undefined) {
+      fields.push('whatsapp_contact_permission = ?');
+      bindings.push(updates.whatsappContactPermission ? 1 : 0);
+    }
+    if (updates.unansweredQuestions !== undefined) {
+      fields.push('unanswered_questions_json = ?');
+      bindings.push(JSON.stringify(updates.unansweredQuestions));
+    }
+    if (updates.confusions !== undefined) {
+      fields.push('confusions_json = ?');
+      bindings.push(JSON.stringify(updates.confusions));
+    }
 
     if (fields.length === 0) {
       return this.getLeadById(db, tenantId, leadId);
@@ -247,8 +285,10 @@ export class LeadRepository {
           detected_language, contact_method_preference, contact_permission,
           external_sharing_permission, lead_status, status_reason, missing_details_json,
           questions_answered_json, assigned_expert_id, owner_id, next_action,
-          next_action_owner, summary, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          next_action_owner, summary, current_location, nationality, profession,
+          whatsapp_number, whatsapp_same_as_phone, whatsapp_contact_permission,
+          unanswered_questions_json, confusions_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         id,
@@ -274,6 +314,14 @@ export class LeadRepository {
         data.nextAction || null,
         data.nextActionOwner || null,
         data.summary || null,
+        data.currentLocation || null,
+        data.nationality || null,
+        data.profession || null,
+        data.whatsappNumber || null,
+        data.whatsappSameAsPhone ? 1 : 0,
+        data.whatsappContactPermission ? 1 : 0,
+        JSON.stringify(data.unansweredQuestions || []),
+        JSON.stringify(data.confusions || []),
         now,
         now
       )
@@ -372,6 +420,20 @@ export class LeadRepository {
       }
     } catch {}
 
+    let unansweredQuestions: string[] = [];
+    try {
+      if (row.unanswered_questions_json) {
+        unansweredQuestions = JSON.parse(row.unanswered_questions_json);
+      }
+    } catch {}
+
+    let confusions: string[] = [];
+    try {
+      if (row.confusions_json) {
+        confusions = JSON.parse(row.confusions_json);
+      }
+    } catch {}
+
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -400,6 +462,14 @@ export class LeadRepository {
       lastQualifiedAt: row.last_qualified_at ? Number(row.last_qualified_at) : null,
       createdAt: Number(row.created_at),
       updatedAt: Number(row.updated_at),
+      currentLocation: row.current_location || null,
+      nationality: row.nationality || null,
+      profession: row.profession || null,
+      whatsappNumber: row.whatsapp_number || null,
+      whatsappSameAsPhone: row.whatsapp_same_as_phone === 1,
+      whatsappContactPermission: row.whatsapp_contact_permission === 1,
+      unansweredQuestions,
+      confusions,
     };
   }
 }
