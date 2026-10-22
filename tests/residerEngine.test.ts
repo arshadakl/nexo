@@ -355,23 +355,25 @@ describe('RESIDER Conversational Engine & Specification Scenarios', () => {
   });
 
   it('Scenario 13: The Sayed Adinan Visiting Case — Multi-turn bridge and outside_scope_request transition', () => {
-    // Turn 1: Lead says "Iam just visiting there"
+    // Turn 1: Lead says "Am just arrived in uae" or "Iam just visiting there"
     const turn1Output = {
       intent: 'general_enquiry',
       language: 'en',
-      replyText: 'Got it, bro! Resider specifically assists with 2-year residency visas for freelancers/founders and setting up new UAE businesses. Are you just visiting for a holiday, or are you exploring moving or starting a business in Dubai?',
-      rationale: 'Turn 1 out-of-scope bridge: Acknowledge visiting, educate on 2 services, ask holiday vs relocation',
-      extractedFields: {},
+      replyText: 'Welcome to the UAE! Hope you’re settling in well. What are you planning to do here in Dubai — are you exploring freelancing, starting a company, or looking at long-term residency options?',
+      rationale: 'Turn 1 out-of-scope bridge: Acknowledge arrival, welcome warmly, ask holiday/settling vs residency',
+      extractedFields: {
+        uaeLocationContext: 'inside_uae',
+      },
       missingFields: [],
       questionsAnswered: [],
-      leadStatus: 'needs_clarification',
-      statusReason: 'Lead mentioned visiting; offered 2-service bridge to clarify holiday vs residency',
+      leadStatus: 'exploring',
+      statusReason: 'Lead just arrived in UAE; actively exploring residency and business options',
       humanReviewRequired: false,
       safetyFlags: [],
     };
     const parsedTurn1 = AIQualificationResultSchema.parse(turn1Output);
-    expect(parsedTurn1.leadStatus).toBe('needs_clarification');
-    expect(parsedTurn1.replyText).toContain('Are you just visiting for a holiday');
+    expect(parsedTurn1.leadStatus).toBe('exploring');
+    expect(parsedTurn1.replyText).toContain('Welcome to the UAE');
 
     // Turn 2: Lead confirms strictly holiday / tourism only
     const turn2Output = {
