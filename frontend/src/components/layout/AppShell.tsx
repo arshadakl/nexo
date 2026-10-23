@@ -14,7 +14,8 @@ export function AppShell({
   children: ReactNode;
 }) {
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
-  const isWorkspace = currentTab === 'inbox';
+  // Full-bleed screens manage their own scrolling (chat thread, leads table/board).
+  const isWorkspace = currentTab === 'inbox' || currentTab === 'leads';
   const mainRef = useRef<HTMLElement>(null);
   const previousTab = useRef(currentTab);
   useEffect(() => {

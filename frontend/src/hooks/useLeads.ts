@@ -61,6 +61,34 @@ export function useUpdateLead(leadId: string | null) {
   });
 }
 
+/** Moves a lead to another stage (Kanban). Updates every cached lead list immediately and rolls back on failure. */
+export function useMoveLeadStage() {
+  const queryClient = useQueryClient();
+  const listKey = [...queryKeys.leads.all, 'list'];
+
+  return useMutation({
+    mutationFn: ({ leadId, leadStatus }: { leadId: string; leadStatus: LeadStatus }) =>
+      apiFetch<Lead>(`/api/leads/${encodeURIComponent(leadId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ leadStatus }),
+      }),
+    onMutate: async ({ leadId, leadStatus }) => {
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previous = queryClient.getQueriesData<Lead[]>({ queryKey: listKey });
+      queryClient.setQueriesData<Lead[]>({ queryKey: listKey }, (old) =>
+        old?.map((lead) => (lead.id === leadId ? { ...lead, leadStatus } : lead)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.leads.all });
+    },
+  });
+}
+
 export function useCreateLead() {
   const queryClient = useQueryClient();
 

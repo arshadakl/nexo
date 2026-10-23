@@ -213,5 +213,9 @@ function sampleLeads(now) {
       uaeLocationContext: 'inside_uae', leadStatus: 'exploring', qualification: 'warm', qualificationReason: 'Exploring setup options',
       updatedAt: now - 7200000,
     },
+    { ...base, id: 'lead-c', fullName: 'Rahul Menon', serviceVertical: 'residency', residencyIntent: 'permit_with_residency', profession: 'Graphic designer', nationality: 'Indian', currentCountry: 'India', targetEmirate: 'Dubai', timeline: 'next month', phoneOrEmail: '+91 98470 11223', whatsappSameAsPhone: true, leadStatus: 'handover_requested', qualification: 'warm', qualificationReason: 'Asked for pricing', nextAction: 'Confirm costing for freelance permit', updatedAt: now - 1500000 },
+    { ...base, id: 'lead-d', fullName: 'Aisha Khan', serviceVertical: 'both', residencyIntent: 'understanding_options', workBusinessActivity: 'Marketing agency', nationality: 'British', currentCountry: 'United Kingdom', targetEmirate: 'Abu Dhabi', timeline: 'in 3 months', leadStatus: 'needs_clarification', qualification: 'cold', qualificationReason: 'Exploring for later this year', updatedAt: now - 86400000 * 2 },
+    { ...base, id: 'lead-e', fullName: 'Omar Hassan', serviceVertical: 'business_setup', residencyIntent: 'unspecified', workBusinessActivity: 'IT consulting', nationality: 'Egyptian', currentCountry: 'United Arab Emirates', currentCity: 'Sharjah', uaeLocationContext: 'inside_uae', visaStatus: 'Employment visa', timeline: 'this month', phoneOrEmail: '+971 50 123 4567', leadStatus: 'handed_over', qualification: 'hot', qualificationReason: 'Asked for an expert call this week', nextAction: 'Expert intro sent', updatedAt: now - 300000 },
+    { ...base, id: 'lead-f', fullName: null, serviceVertical: 'unspecified', residencyIntent: 'unspecified', leadStatus: 'exploring', qualification: 'unknown', updatedAt: now - 60000 },
   ];
 }
