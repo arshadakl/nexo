@@ -10,6 +10,7 @@ import {
   detectLanguageHint,
   hasCustomerText,
   historyText,
+  isSharedPostText,
   isUnsupportedFallbackText,
   isUnsupportedType,
   unsupportedFallbackText,
@@ -335,10 +336,12 @@ async function handleTurn(
     .first<any>();
 
   const textMessages = turn.filter((m) => hasCustomerText(m.message_type, m.message_text));
-  const hasUnsupported = turn.some((m) => isUnsupportedType(m.message_type));
+  const sharedPosts = turn.filter((m) => isSharedPostText(m.message_text));
+  const hasUnsupported = turn.some((m) => isUnsupportedType(m.message_type) && !isSharedPostText(m.message_text));
 
   // Voice notes / attachments with no readable text: one honest text-request fallback, no model call.
-  if (textMessages.length === 0) {
+  // A shared post/reel is different: it is how many enquiries start, so the AI replies to it.
+  if (textMessages.length === 0 && sharedPosts.length === 0) {
     const kind = turn.some((m) => m.message_type === 'audio') ? 'audio' : 'attachment';
     const recentText = await db
       .prepare(
@@ -433,7 +436,13 @@ async function handleTurn(
       conversation.customer_name && conversation.customer_name !== 'Instagram User' ? conversation.customer_name : null,
     channel: target.channel,
     approvedKnowledge,
-    turn: { messages: textMessages.map((m) => m.message_text), hasUnsupportedAttachment: hasUnsupported },
+    turn: {
+      messages: textMessages.length
+        ? textMessages.map((m) => m.message_text)
+        : ['(The customer shared a post or reel without writing anything.)'],
+      hasUnsupportedAttachment: hasUnsupported,
+      sharedPost: sharedPosts.length > 0,
+    },
     messageDate: new Date(turnLatestAt).toISOString().slice(0, 10),
     intake: intakeBefore,
   });

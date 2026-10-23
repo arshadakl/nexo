@@ -49,7 +49,7 @@ export class InstagramWebhookAdapter {
           providerConvoId: `ig_convo_${senderId}_${recipientId}`,
           providerMessageId,
           senderId,
-          messageText: messageText || placeholderText(messageType),
+          messageText: messageText || placeholderText(messageType, attachments),
           messageType,
           attachments,
           timestamp,

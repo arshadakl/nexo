@@ -9,6 +9,15 @@ import type { InboundAttachment, InboundMessageType } from '@shared/types/meta.t
 const AUDIO_TYPES = new Set(['audio', 'voice']);
 const IMAGE_TYPES = new Set(['image', 'sticker', 'video', 'animated_image']);
 const DOCUMENT_TYPES = new Set(['file', 'document']);
+// Shared posts/reels/stories: in real chats ~13% of conversations open this way, usually with
+// one of Resider's own posts. They signal interest rather than content we need to read.
+const SHARE_TYPES = new Set(['share', 'ig_reel', 'reel', 'ig_post', 'post', 'story_mention', 'ig_story', 'story']);
+
+export const SHARED_POST_PLACEHOLDER = '[Shared post]';
+
+export function isSharedPostOnly(attachments: InboundAttachment[]): boolean {
+  return attachments.length > 0 && attachments.every((a) => SHARE_TYPES.has(a.type));
+}
 
 export function classifyAttachments(attachments: InboundAttachment[]): InboundMessageType {
   if (attachments.length === 0) return 'text';
@@ -26,12 +35,20 @@ const PLACEHOLDERS: Record<Exclude<InboundMessageType, 'text'>, string> = {
 };
 
 /** Text stored in messages.message_text (NOT NULL) for an attachment without a caption. */
-export function placeholderText(messageType: InboundMessageType): string {
-  return messageType === 'text' ? '' : PLACEHOLDERS[messageType];
+export function placeholderText(messageType: InboundMessageType, attachments: InboundAttachment[] = []): string {
+  if (messageType === 'text') return '';
+  return isSharedPostOnly(attachments) ? SHARED_POST_PLACEHOLDER : PLACEHOLDERS[messageType];
+}
+
+export function isSharedPostText(messageText: string): boolean {
+  return messageText === SHARED_POST_PLACEHOLDER;
 }
 
 /** How an attachment appears in the model's conversation history. */
 export function historyText(messageType: string, messageText: string): string {
+  if (isSharedPostText(messageText)) {
+    return "[The customer shared a post or reel (often one of Resider's own posts). Its content is not visible here.]";
+  }
   const placeholderValues = Object.values(PLACEHOLDERS);
   const caption = placeholderValues.includes(messageText) ? '' : messageText;
   if (messageType === 'audio') {
@@ -50,7 +67,11 @@ export function isUnsupportedType(messageType: string): boolean {
 /** True when an inbound row carries real customer text (an attachment caption counts). */
 export function hasCustomerText(messageType: string, messageText: string): boolean {
   if (!isUnsupportedType(messageType)) return messageText.trim().length > 0;
-  return !Object.values(PLACEHOLDERS).includes(messageText) && messageText.trim().length > 0;
+  return (
+    !Object.values(PLACEHOLDERS).includes(messageText) &&
+    !isSharedPostText(messageText) &&
+    messageText.trim().length > 0
+  );
 }
 
 const FALLBACKS = {

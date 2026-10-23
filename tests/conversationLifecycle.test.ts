@@ -307,6 +307,18 @@ describe('F. unsupported voice notes', () => {
     expect(outbound()).toHaveLength(1); // not repeated while still waiting for text
   });
 
+  it('treats a shared post/reel as an opening the AI replies to, not as an unreadable file', async () => {
+    aiScript.push({ replyText: 'Hey! 👋 Thanks for reaching out. What would you like to know?' });
+    await webhook('s1', undefined, [{ type: 'ig_reel' }]);
+    await drain();
+
+    expect(inbound()[0].message_text).toBe('[Shared post]');
+    expect(aiCalls).toHaveLength(1);
+    expect(systemPrompt(0)).toContain('"sharedPostOrReel": true');
+    expect(systemPrompt(0)).toContain('"unreadableVoiceNoteOrAttachment": false');
+    expect(outbound().map((m) => m.message_text)).toEqual(['Hey! 👋 Thanks for reaching out. What would you like to know?']);
+  });
+
   it('replies in Malayalam when the customer writes Malayalam', async () => {
     aiScript.push({ replyText: 'ഹായ് 👋 എന്താണ് അറിയേണ്ടത്?', language: 'ml' });
     await webhook('t1', 'ഹായ്');

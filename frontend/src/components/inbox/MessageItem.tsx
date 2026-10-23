@@ -1,4 +1,4 @@
-import { AlertCircle, Check, CheckCheck, Clock, FileText, Image as ImageIcon, Mic, Paperclip, RotateCw, Sparkles, UserRound } from 'lucide-react';
+import { AlertCircle, Check, CheckCheck, Clock, FileText, Image as ImageIcon, Mic, Paperclip, RotateCw, Share2, Sparkles, UserRound } from 'lucide-react';
 import type { ChannelType, Message } from '@shared/types/crm.types';
 import { absoluteTime } from '@/lib/formatDate';
 import { channelTheme } from '@/lib/channelTheme';
@@ -22,7 +22,7 @@ const attachmentLabels: Record<string, { label: string; Icon: typeof Mic }> = {
   template: { label: 'Template', Icon: FileText },
 };
 
-const PLACEHOLDERS = new Set(['[Voice note]', '[Image or video]', '[File]', '[Attachment]']);
+const PLACEHOLDERS = new Set(['[Voice note]', '[Image or video]', '[File]', '[Attachment]', '[Shared post]']);
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
@@ -55,7 +55,12 @@ export function MessageItem({
         : message.senderType === 'system'
           ? 'System'
           : customerName;
-  const attachment = message.messageType !== 'text' ? attachmentLabels[message.messageType] : undefined;
+  const attachment =
+    message.messageText === '[Shared post]'
+      ? { label: 'Shared a post or reel', Icon: Share2 }
+      : message.messageType !== 'text'
+        ? attachmentLabels[message.messageType]
+        : undefined;
   const text = PLACEHOLDERS.has(message.messageText) ? '' : message.messageText;
   const time = (
     <time dateTime={new Date(message.createdAt).toISOString()} title={absoluteTime(message.createdAt)}>
