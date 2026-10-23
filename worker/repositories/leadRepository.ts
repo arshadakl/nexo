@@ -1,5 +1,7 @@
 import type {
   Lead,
+  LeadPage,
+  LeadPageQuery,
   LeadStatus,
   ServiceVertical,
   LocationContext,
@@ -86,6 +88,97 @@ export class LeadRepository {
     const rows = await db.prepare(query).bind(...bindings).all<any>();
 
     return (rows.results || []).map((row) => this.mapRowToLead(row));
+  }
+
+  /**
+   * Standard paged lead search for the Leads table: filters, sortable columns and a total count.
+   * Page size is capped at 200 (the Kanban board loads one large page).
+   */
+  async listLeadsPage(db: D1Database, tenantId: string, query: LeadPageQuery = {}): Promise<LeadPage> {
+    const pageSize = Math.min(Math.max(Math.floor(query.pageSize || 25), 1), 200);
+    const page = Math.max(Math.floor(query.page || 1), 1);
+    const where: string[] = ['tenant_id = ?'];
+    const bindings: unknown[] = [tenantId];
+
+    if (query.status) {
+      where.push('lead_status = ?');
+      bindings.push(query.status);
+    }
+    if (query.serviceVertical) {
+      where.push('service_vertical = ?');
+      bindings.push(query.serviceVertical);
+    }
+    if (query.qualification) {
+      where.push('qualification = ?');
+      bindings.push(query.qualification);
+    }
+    if (query.search) {
+      const like = `%${query.search}%`;
+      where.push(
+        `(full_name LIKE ? OR phone_or_email LIKE ? OR whatsapp_number LIKE ? OR work_business_activity LIKE ?
+          OR profession LIKE ? OR target_emirate LIKE ? OR summary LIKE ? OR current_location LIKE ?
+          OR current_country LIKE ? OR nationality LIKE ?)`
+      );
+      bindings.push(like, like, like, like, like, like, like, like, like, like);
+    }
+
+    // asc = natural order: oldest first, A-Z, pipeline order, Hot first. Empty names always last.
+    const dir = query.direction === 'asc' ? 'ASC' : 'DESC';
+    const order: Record<string, string> = {
+      updated: `updated_at ${dir}`,
+      created: `created_at ${dir}`,
+      name: `CASE WHEN full_name IS NULL OR full_name = '' THEN 1 ELSE 0 END, LOWER(full_name) ${dir}`,
+      stage: `CASE lead_status
+        WHEN 'needs_clarification' THEN 0 WHEN 'exploring' THEN 1 WHEN 'ready_for_team' THEN 2
+        WHEN 'handover_requested' THEN 3 WHEN 'support_enquiry' THEN 4 WHEN 'handed_over' THEN 5
+        WHEN 'outside_scope_request' THEN 6 ELSE 7 END ${dir}`,
+      qualification: `CASE qualification WHEN 'hot' THEN 0 WHEN 'warm' THEN 1 WHEN 'cold' THEN 2
+        WHEN 'unknown' THEN 3 ELSE 4 END ${dir}`,
+    };
+    const orderBy = `${order[query.sort || 'updated'] ?? order.updated}, updated_at DESC, id ASC`;
+    const whereSql = where.join(' AND ');
+
+    const totalRow = await db
+      .prepare(`SELECT COUNT(*) AS total FROM leads WHERE ${whereSql}`)
+      .bind(...bindings)
+      .first<{ total: number }>();
+
+    const rows = await db
+      .prepare(
+        `SELECT
+          id, tenant_id, full_name, phone_or_email, service_vertical, residency_intent,
+          work_business_activity, uae_location_context, target_emirate, timeline,
+          detected_language, contact_method_preference, contact_permission,
+          external_sharing_permission, lead_status, status_reason, missing_details_json,
+          questions_answered_json, assigned_expert_id, owner_id, next_action,
+          next_action_owner, summary, last_qualified_at, created_at, updated_at,
+          current_location, nationality, profession, whatsapp_number,
+          whatsapp_same_as_phone, whatsapp_contact_permission,
+          unanswered_questions_json, confusions_json, ${LEAD_V9_COLUMNS}
+        FROM leads WHERE ${whereSql}
+        ORDER BY ${orderBy}
+        LIMIT ? OFFSET ?`
+      )
+      .bind(...bindings, pageSize, (page - 1) * pageSize)
+      .all<any>();
+
+    return {
+      items: (rows.results || []).map((row) => this.mapRowToLead(row)),
+      total: Number(totalRow?.total || 0),
+      page,
+      pageSize,
+    };
+  }
+
+  /** Moves several leads to one stage at once (bulk action). Returns how many were updated. */
+  async bulkUpdateStatus(db: D1Database, tenantId: string, leadIds: string[], status: LeadStatus): Promise<number> {
+    if (leadIds.length === 0) return 0;
+    const placeholders = leadIds.map(() => '?').join(',');
+    const result = await db
+      .prepare(`UPDATE leads SET lead_status = ?, updated_at = ? WHERE tenant_id = ? AND id IN (${placeholders})`)
+      .bind(status, Date.now(), tenantId, ...leadIds)
+      .run();
+    return Number(result.meta?.changes || 0);
   }
 
   /**

@@ -184,6 +184,29 @@ export function createWorkspaceFixture() {
       return ok(result);
     }
     if (url.pathname === '/api/leads') return ok(sampleLeads(now));
+    if (url.pathname === '/api/leads/search') {
+      const q = url.searchParams;
+      const rank = { hot: 0, warm: 1, cold: 2, unknown: 3 };
+      let items = sampleLeads(now).filter(
+        (l) =>
+          (!q.get('status') || l.leadStatus === q.get('status')) &&
+          (!q.get('serviceVertical') || l.serviceVertical === q.get('serviceVertical')) &&
+          (!q.get('qualification') || l.qualification === q.get('qualification')) &&
+          (!q.get('search') || JSON.stringify(l).toLowerCase().includes(q.get('search').toLowerCase())),
+      );
+      const dir = q.get('direction') === 'asc' ? 1 : -1;
+      const key = q.get('sort') || 'updated';
+      items.sort((a, b) =>
+        key === 'name' ? dir * (a.fullName || '~').localeCompare(b.fullName || '~')
+        : key === 'qualification' ? dir * (rank[a.qualification] - rank[b.qualification])
+        : key === 'created' ? dir * (a.createdAt - b.createdAt)
+        : dir * (a.updatedAt - b.updatedAt),
+      );
+      const page = Number(q.get('page') || 1);
+      const pageSize = Number(q.get('pageSize') || 25);
+      return ok({ items: items.slice((page - 1) * pageSize, page * pageSize), total: items.length, page, pageSize });
+    }
+    if (url.pathname === '/api/leads/bulk-status') return ok({ updated: 0 });
     if (
       url.pathname === '/api/experts' ||
       url.pathname === '/api/integrations'

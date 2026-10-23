@@ -121,3 +121,20 @@ export const CreateLeadSchema = z.object({
 });
 
 export type CreateLeadSchemaType = z.infer<typeof CreateLeadSchema>;
+
+/** Query string for GET /api/leads/search (values arrive as strings). */
+export const LeadPageQuerySchema = z.object({
+  status: LeadStatusEnum.optional(),
+  serviceVertical: ServiceVerticalEnum.optional(),
+  qualification: LeadQualificationEnum.optional(),
+  search: z.string().trim().max(200).optional().transform((v) => v || undefined),
+  sort: z.enum(['updated', 'created', 'name', 'stage', 'qualification']).optional(),
+  direction: z.enum(['asc', 'desc']).optional(),
+  page: z.coerce.number().int().min(1).max(10_000).optional(),
+  pageSize: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+export const BulkLeadStatusSchema = z.object({
+  leadIds: z.array(z.string().min(1)).min(1).max(200),
+  leadStatus: LeadStatusEnum,
+});

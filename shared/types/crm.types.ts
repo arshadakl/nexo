@@ -228,3 +228,24 @@ export interface InternalNote {
   content: string;
   createdAt: number;
 }
+
+export type LeadSortKey = 'updated' | 'created' | 'name' | 'stage' | 'qualification';
+
+export interface LeadPageQuery {
+  status?: LeadStatus | undefined;
+  serviceVertical?: ServiceVertical | undefined;
+  qualification?: LeadQualification | undefined;
+  search?: string | undefined;
+  sort?: LeadSortKey | undefined;
+  direction?: 'asc' | 'desc' | undefined;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+}
+
+/** One page of leads plus the total matching the filters. */
+export interface LeadPage {
+  items: Lead[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

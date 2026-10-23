@@ -1,8 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/apiClient';
 import { queryKeys } from '@/queries/queryKeys';
 import type {
   Lead,
+  LeadPage,
+  LeadPageQuery,
   LeadStatus,
   InternalNote,
   CreateNoteRequest,
@@ -30,6 +32,47 @@ export function useLeads(filters: UseLeadsFilters = {}) {
     queryKey: queryKeys.leads.list(filters as Record<string, unknown>),
     queryFn: ({ signal }) => apiFetch<Lead[]>(endpoint, { signal }),
     staleTime: 30 * 1000,
+  });
+}
+
+/** One page of leads for the Leads table/board; keeps the previous page on screen while loading. */
+export function useLeadsPage(query: LeadPageQuery) {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+  });
+  return useQuery({
+    queryKey: queryKeys.leads.list({ ...query, view: 'page' } as Record<string, unknown>),
+    queryFn: ({ signal }) => apiFetch<LeadPage>(`/api/leads/search?${params.toString()}`, { signal }),
+    placeholderData: keepPreviousData,
+    staleTime: 30 * 1000,
+  });
+}
+
+/** Fetches every lead matching the filters (for CSV export), page by page. */
+export async function fetchAllLeads(query: LeadPageQuery): Promise<Lead[]> {
+  const all: Lead[] = [];
+  for (let page = 1; page <= 50; page++) {
+    const params = new URLSearchParams();
+    Object.entries({ ...query, page, pageSize: 200 }).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+    });
+    const result = await apiFetch<LeadPage>(`/api/leads/search?${params.toString()}`);
+    all.push(...result.items);
+    if (all.length >= result.total || result.items.length === 0) break;
+  }
+  return all;
+}
+
+/** Bulk action: move selected leads to one stage. */
+export function useBulkLeadStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { leadIds: string[]; leadStatus: LeadStatus }) =>
+      apiFetch<{ updated: number }>('/api/leads/bulk-status', { method: 'POST', body: JSON.stringify(body) }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.leads.all });
+    },
   });
 }
 
@@ -74,9 +117,10 @@ export function useMoveLeadStage() {
       }),
     onMutate: async ({ leadId, leadStatus }) => {
       await queryClient.cancelQueries({ queryKey: listKey });
-      const previous = queryClient.getQueriesData<Lead[]>({ queryKey: listKey });
-      queryClient.setQueriesData<Lead[]>({ queryKey: listKey }, (old) =>
-        old?.map((lead) => (lead.id === leadId ? { ...lead, leadStatus } : lead)),
+      const previous = queryClient.getQueriesData<Lead[] | LeadPage>({ queryKey: listKey });
+      const moveIn = (items: Lead[]) => items.map((lead) => (lead.id === leadId ? { ...lead, leadStatus } : lead));
+      queryClient.setQueriesData<Lead[] | LeadPage>({ queryKey: listKey }, (old) =>
+        !old ? old : Array.isArray(old) ? moveIn(old) : { ...old, items: moveIn(old.items) },
       );
       return { previous };
     },

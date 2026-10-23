@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { jsonOk, jsonError } from '../lib/response';
 import { leadRepository } from '../repositories/leadRepository';
-import { UpdateLeadSchema, CreateLeadSchema } from '@shared/schemas/lead.schema';
+import { UpdateLeadSchema, CreateLeadSchema, LeadPageQuerySchema, BulkLeadStatusSchema } from '@shared/schemas/lead.schema';
 import { CreateNoteSchema } from '@shared/schemas/conversation.schema';
 import type { WorkerEnv } from '../env';
 import type { LeadStatus } from '@shared/types/crm.types';
@@ -31,6 +31,40 @@ leadRoutes.get('/', async (c) => {
   });
 
   return jsonOk(c, leads);
+});
+
+/**
+ * GET /api/leads/search
+ * Paged, sortable lead search for the Leads table: returns { items, total, page, pageSize }.
+ */
+leadRoutes.get('/search', async (c) => {
+  const tenantId = resolveTenantId(c);
+  const parsed = LeadPageQuerySchema.safeParse(c.req.query());
+  if (!parsed.success) {
+    return jsonError(c, 'VALIDATION_ERROR', parsed.error.errors[0]?.message || 'Invalid query', 400);
+  }
+  const page = await leadRepository.listLeadsPage(c.env.DB, tenantId, parsed.data);
+  return jsonOk(c, page);
+});
+
+/**
+ * POST /api/leads/bulk-status
+ * Moves selected leads to one stage. Body: { leadIds: string[], leadStatus }.
+ */
+leadRoutes.post('/bulk-status', async (c) => {
+  const tenantId = resolveTenantId(c);
+  let rawBody: unknown;
+  try {
+    rawBody = await c.req.json();
+  } catch {
+    return jsonError(c, 'BAD_REQUEST', 'Invalid JSON body', 400);
+  }
+  const parsed = BulkLeadStatusSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return jsonError(c, 'VALIDATION_ERROR', parsed.error.errors[0]?.message || 'Invalid payload', 400);
+  }
+  const updated = await leadRepository.bulkUpdateStatus(c.env.DB, tenantId, parsed.data.leadIds, parsed.data.leadStatus);
+  return jsonOk(c, { updated });
 });
 
 /**
