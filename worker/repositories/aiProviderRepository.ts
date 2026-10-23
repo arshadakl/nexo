@@ -7,6 +7,7 @@ import type {
   AIHealthStatus,
 } from '@shared/types/ai.types';
 import { encryptCredential, decryptCredential } from '../lib/crypto';
+import { isGeminiNativeBaseUrl } from '../adapters/ai/gemini';
 
 // Helper to mask API keys safely (e.g. "gsk_••••••••••••3x9Q")
 export function maskApiKey(key: string): string {
@@ -177,6 +178,7 @@ export class AIProviderRepository {
     const statements: D1PreparedStatement[] = [];
 
     // If setting as default, clear other defaults first
+    const providerType = isGeminiNativeBaseUrl(input.baseUrl) ? 'gemini' : 'openai_compatible';
     if (isDefault) {
       statements.push(
         db.prepare('UPDATE tenant_ai_providers SET is_default = 0 WHERE tenant_id = ?').bind(tenantId)
@@ -190,11 +192,12 @@ export class AIProviderRepository {
           encrypted_api_key, key_version, key_nonce, default_model,
           temperature, max_tokens, is_active, is_default, custom_headers,
           last_health_status, created_at, updated_at
-        ) VALUES (?, ?, ?, 'openai_compatible', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)`
       ).bind(
         id,
         tenantId,
         input.name,
+        providerType,
         input.baseUrl,
         encrypted.ciphertext,
         encrypted.keyVersion,
@@ -216,7 +219,7 @@ export class AIProviderRepository {
       id,
       tenantId,
       name: input.name,
-      providerType: 'openai_compatible',
+      providerType,
       baseUrl: input.baseUrl,
       defaultModel: input.defaultModel,
       temperature: input.temperature ?? 0.2,

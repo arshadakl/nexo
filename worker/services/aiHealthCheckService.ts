@@ -1,6 +1,7 @@
 import type { AIProviderPreset, AIHealthCheckResult } from '@shared/types/ai.types';
 import { aiProviderRepository } from '../repositories/aiProviderRepository';
-import { openAiCompatibleAdapter } from '../adapters/ai/openAiCompatible';
+import { aiClientFor } from '../adapters/ai';
+import { GEMINI_DEFAULT_BASE_URL, GEMINI_FALLBACK_MODEL } from '../adapters/ai/gemini';
 import { logger } from '../lib/logger';
 
 export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
@@ -17,6 +18,15 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     ],
     placeholderApiKey: 'gsk_...',
     description: 'Ultra-low latency (~200ms) with full structured JSON output support.',
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    baseUrl: GEMINI_DEFAULT_BASE_URL,
+    defaultModel: GEMINI_FALLBACK_MODEL,
+    recommendedModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite'],
+    placeholderApiKey: 'AIza... or AQ...',
+    description: 'Native Gemini API (generateContent) with JSON output. Falls back to gemini-3.5-flash when a model is overloaded.',
   },
   {
     id: 'openrouter',
@@ -107,7 +117,7 @@ export class AIHealthCheckService {
       model: providerConfig.defaultModel,
     });
 
-    const testResult = await openAiCompatibleAdapter.testConnection(providerConfig);
+    const testResult = await aiClientFor(providerConfig).testConnection(providerConfig);
 
     // Record health status in D1
     await aiProviderRepository.updateHealthStatus(

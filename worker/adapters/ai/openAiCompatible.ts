@@ -98,103 +98,7 @@ export class OpenAICompatibleAdapter implements AIProviderClient {
     const rawJson = (await response.json()) as any;
     const content = rawJson?.choices?.[0]?.message?.content;
 
-    if (!content || typeof content !== 'string') {
-      throw new AIProviderError(
-        'AI provider returned an empty or invalid message content payload',
-        'SCHEMA_MISMATCH',
-        200,
-        rawJson
-      );
-    }
-
-    try {
-      // Strip markdown code fences if output by models (e.g. ```json ... ```)
-      let sanitized = content
-        .trim()
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/\s*```$/i, '')
-        .trim();
-
-      // If text contains a JSON object anywhere, extract it
-      const firstBrace = sanitized.indexOf('{');
-      const lastBrace = sanitized.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        sanitized = sanitized.substring(firstBrace, lastBrace + 1);
-      }
-
-      let parsedContent: any;
-      try {
-        parsedContent = JSON.parse(sanitized);
-      } catch (err) {
-        throw new AIProviderError(
-          'AI provider returned an empty or invalid message content payload',
-          'SCHEMA_MISMATCH',
-          200,
-          content
-        );
-      }
-
-      const validated = AIQualificationResultSchema.safeParse(parsedContent);
-      if (validated.success) {
-        return validated.data as unknown as AIQualificationResult;
-      }
-
-      logger.warn('AI structured output failed schema validation; triggering fail-closed human review fallback', {
-        provider: config.name,
-        model: config.defaultModel,
-        validationIssues: validated.error.issues,
-        rawSnippet: content.slice(0, 300),
-      });
-
-      // Fail-closed fallback: never auto-send invalid model responses
-      return {
-        intent: 'unknown',
-        language: 'en',
-        toneMirroring: null,
-        replyText: 'Thanks for reaching out! Let me connect you with our team to assist you directly.',
-        rationale: 'Schema validation failed; triggering safe human review fallback.',
-        extractedFields: {},
-        fieldConfidence: {},
-        missingFields: [],
-        questionsAnswered: [],
-        unansweredQuestions: [],
-        confusions: [],
-        leadStatus: 'handover_requested',
-        statusReason: 'AI model returned non-conforming schema payload',
-        expertMatchCriteria: undefined,
-        humanReviewRequired: true,
-        humanReviewReason: 'Schema validation failed against AIQualificationResultSchema',
-        safetyFlags: ['INVALID_MODEL_OUTPUT'],
-      };
-    } catch (parseErr) {
-      if (parseErr instanceof AIProviderError) {
-        throw parseErr;
-      }
-      logger.error('Exception parsing structured AI output; triggering fail-closed human review fallback', parseErr, {
-        provider: config.name,
-        model: config.defaultModel,
-        rawSnippet: content.slice(0, 200),
-      });
-      return {
-        intent: 'unknown',
-        language: 'en',
-        toneMirroring: null,
-        replyText: 'Thanks for reaching out! Let me connect you with our team to assist you directly.',
-        rationale: 'Exception occurred during JSON parsing; triggering safe human fallback.',
-        extractedFields: {},
-        fieldConfidence: {},
-        missingFields: [],
-        questionsAnswered: [],
-        unansweredQuestions: [],
-        confusions: [],
-        leadStatus: 'handover_requested',
-        statusReason: 'Exception parsing structured AI output',
-        expertMatchCriteria: undefined,
-        humanReviewRequired: true,
-        humanReviewReason: 'Exception parsing structured AI output',
-        safetyFlags: ['JSON_PARSE_EXCEPTION'],
-      };
-    }
+    return parseStructuredQualification(content, config, rawJson);
   }
 
   /**
@@ -249,6 +153,113 @@ export class OpenAICompatibleAdapter implements AIProviderClient {
       };
     }
   }
+}
+
+/**
+ * Parses a model's JSON text into a validated qualification result. Shared by every provider
+ * adapter. Fails closed: invalid output becomes a human-review result, never an auto-sent reply.
+ */
+export function parseStructuredQualification(
+  content: unknown,
+  config: Pick<DecryptedAIProviderConfig, 'name' | 'defaultModel'>,
+  rawJson?: unknown
+): AIQualificationResult {
+  if (!content || typeof content !== 'string') {
+    throw new AIProviderError(
+      'AI provider returned an empty or invalid message content payload',
+      'SCHEMA_MISMATCH',
+      200,
+      rawJson
+    );
+  }
+
+  try {
+    // Strip markdown code fences if output by models (e.g. ```json ... ```)
+    let sanitized = content
+      .trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    // If text contains a JSON object anywhere, extract it
+    const firstBrace = sanitized.indexOf('{');
+    const lastBrace = sanitized.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      sanitized = sanitized.substring(firstBrace, lastBrace + 1);
+    }
+
+    let parsedContent: any;
+    try {
+      parsedContent = JSON.parse(sanitized);
+    } catch (err) {
+      throw new AIProviderError(
+        'AI provider returned an empty or invalid message content payload',
+        'SCHEMA_MISMATCH',
+        200,
+        content
+      );
+    }
+
+    const validated = AIQualificationResultSchema.safeParse(parsedContent);
+    if (validated.success) {
+      return validated.data as unknown as AIQualificationResult;
+    }
+
+    logger.warn('AI structured output failed schema validation; triggering fail-closed human review fallback', {
+      provider: config.name,
+      model: config.defaultModel,
+      validationIssues: validated.error.issues,
+      rawSnippet: content.slice(0, 300),
+    });
+
+    // Fail-closed fallback: never auto-send invalid model responses
+    return {
+      intent: 'unknown',
+      language: 'en',
+      toneMirroring: null,
+      replyText: 'Thanks for reaching out! Let me connect you with our team to assist you directly.',
+      rationale: 'Schema validation failed; triggering safe human review fallback.',
+      extractedFields: {},
+      fieldConfidence: {},
+      missingFields: [],
+      questionsAnswered: [],
+      unansweredQuestions: [],
+      confusions: [],
+      leadStatus: 'handover_requested',
+      statusReason: 'AI model returned non-conforming schema payload',
+      humanReviewRequired: true,
+      humanReviewReason: 'Schema validation failed against AIQualificationResultSchema',
+      safetyFlags: ['INVALID_MODEL_OUTPUT'],
+    };
+  } catch (parseErr) {
+    if (parseErr instanceof AIProviderError) {
+      throw parseErr;
+    }
+    logger.error('Exception parsing structured AI output; triggering fail-closed human review fallback', parseErr, {
+      provider: config.name,
+      model: config.defaultModel,
+      rawSnippet: content.slice(0, 200),
+    });
+    return {
+      intent: 'unknown',
+      language: 'en',
+      toneMirroring: null,
+      replyText: 'Thanks for reaching out! Let me connect you with our team to assist you directly.',
+      rationale: 'Exception occurred during JSON parsing; triggering safe human fallback.',
+      extractedFields: {},
+      fieldConfidence: {},
+      missingFields: [],
+      questionsAnswered: [],
+      unansweredQuestions: [],
+      confusions: [],
+      leadStatus: 'handover_requested',
+      statusReason: 'Exception parsing structured AI output',
+      humanReviewRequired: true,
+      humanReviewReason: 'Exception parsing structured AI output',
+      safetyFlags: ['JSON_PARSE_EXCEPTION'],
+    };
+  }
+
 }
 
 export const openAiCompatibleAdapter = new OpenAICompatibleAdapter();

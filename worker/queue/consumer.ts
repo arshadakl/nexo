@@ -1,4 +1,5 @@
-import { AIProviderError, openAiCompatibleAdapter } from '../adapters/ai/openAiCompatible';
+import { AIProviderError } from '../adapters/ai/openAiCompatible';
+import { aiClientFor } from '../adapters/ai';
 import { aiProviderRepository } from '../repositories/aiProviderRepository';
 import { knowledgeRepository } from '../repositories/knowledgeRepository';
 import { conversationRepository } from '../repositories/conversationRepository';
@@ -445,7 +446,7 @@ async function handleTurn(
     });
   }
 
-  const qualification = await openAiCompatibleAdapter.generateQualification(aiConfig, promptMessages);
+  const qualification = await aiClientFor(aiConfig).generateQualification(aiConfig, promptMessages);
 
   // Recheck before acting: a reply written before the customer's newest message is outdated.
   const newer = await db

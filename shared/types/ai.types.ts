@@ -1,4 +1,4 @@
-export type AIProviderType = 'openai_compatible';
+export type AIProviderType = 'openai_compatible' | 'gemini';
 
 export type AIHealthStatus = 'unknown' | 'healthy' | 'error' | 'unauthorized';
 
