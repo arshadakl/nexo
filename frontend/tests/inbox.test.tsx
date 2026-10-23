@@ -59,7 +59,7 @@ describe('Inbox working journeys', () => {
     await screen.findByRole('textbox', { name: 'Reply to Amina Rahman' });
     expect(input().value).toBe('Amina only');
     await user.click(screen.getByRole('link', { name: 'Leads', exact: true }));
-    await screen.findByPlaceholderText('Search enquiries, activities...');
+    await screen.findByRole('textbox', { name: 'Search leads' });
     await user.click(screen.getByRole('link', { name: 'Inbox', exact: true }));
     await user.click(await screen.findByRole('link', { name: /Amina Rahman/ }));
     await screen.findByRole('textbox', { name: 'Reply to Amina Rahman' });

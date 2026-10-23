@@ -4,20 +4,61 @@ import {
   ArrowUpDown,
   RefreshCw,
   ChevronRight,
+  Flame,
+  Users,
+  CheckCircle2,
+  AlertTriangle,
+  MapPin,
+  Phone,
+  MessageCircle,
+  CalendarClock,
+  Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar } from '@/components/ui/Avatar';
 import { useLeads } from '@/hooks/useLeads';
 import { LeadModal } from '@/components/leads/LeadModal';
-import { humanize, leadLabels } from '@/lib/leadPresentation';
-import { absoluteTime } from '@/lib/formatDate';
+import { leadLabels, qualificationLabels } from '@/lib/leadPresentation';
+import { relativeTime, absoluteTime } from '@/lib/formatDate';
 import { leadsHref, navigate, type WorkspaceRoute } from '@/lib/navigation';
-import type { LeadStatus } from '@shared/types/crm.types';
+import { cn } from '@/lib/utils';
+import type { Lead, LeadStatus } from '@shared/types/crm.types';
 
 interface LeadsViewProps {
   route?: WorkspaceRoute;
   onNavigateToInbox?: (conversationId?: string) => void;
+}
+
+const serviceOptions = [
+  { value: 'all', label: 'All services' },
+  { value: 'residency', label: 'Residency' },
+  { value: 'business_setup', label: 'Business setup' },
+  { value: 'both', label: 'Residency + setup' },
+  { value: 'unspecified', label: 'Not yet clear' },
+];
+
+const serviceChip: Record<string, { label: string; className: string }> = {
+  residency: { label: 'Residency', className: 'bg-violet-500/15 text-violet-700 dark:text-violet-300' },
+  business_setup: { label: 'Business setup', className: 'bg-sky-500/15 text-sky-700 dark:text-sky-300' },
+  both: { label: 'Residency + setup', className: 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300' },
+  unspecified: { label: 'Service not clear', className: 'bg-surface-hover text-content-secondary' },
+};
+
+const qualificationStyle: Record<string, string> = {
+  hot: 'bg-rose-500 text-white',
+  warm: 'bg-amber-400 text-amber-950',
+  cold: 'bg-sky-500 text-white',
+  unknown: 'bg-surface-hover text-content-secondary',
+  outside_scope: 'bg-surface-hover text-content-muted',
+};
+
+function statusStyle(status: LeadStatus) {
+  if (status === 'ready_for_team' || status === 'handed_over') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
+  if (status === 'handover_requested' || status === 'support_enquiry') return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
+  if (status === 'outside_scope_request' || status === 'outside_scope_spam') return 'bg-surface-hover text-content-muted';
+  return 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300';
 }
 
 export function LeadsView({ route, onNavigateToInbox }: LeadsViewProps = {}) {
@@ -39,6 +80,7 @@ export function LeadsView({ route, onNavigateToInbox }: LeadsViewProps = {}) {
     data: leads,
     isLoading,
     isError,
+    isFetching,
     refetch,
   } = useLeads({
     status: selectedStatus === 'all' ? undefined : selectedStatus,
@@ -48,289 +90,261 @@ export function LeadsView({ route, onNavigateToInbox }: LeadsViewProps = {}) {
   });
 
   const handleSelectLead = (id: string | null) => {
-    navigate(
-      leadsHref({
-        leadId: id,
-        status: selectedStatus,
-        search: debouncedSearch,
-      }),
-    );
+    navigate(leadsHref({ leadId: id, status: selectedStatus, search: debouncedSearch }));
   };
 
   const handleStatusFilterChange = (newStatus: string) => {
-    navigate(
-      leadsHref({
-        leadId: selectedLeadId,
-        status: newStatus,
-        search: debouncedSearch,
-      }),
-    );
+    navigate(leadsHref({ leadId: selectedLeadId, status: newStatus, search: debouncedSearch }));
   };
 
-  const toggleSort = () => {
-    setSortBy((prev) => (prev === 'recent' ? 'status' : 'recent'));
-  };
+  const list = leads ?? [];
+  const stats = [
+    { label: 'Leads', value: list.length, Icon: Users, className: 'from-indigo-500 to-violet-500' },
+    { label: 'Hot', value: list.filter((l) => l.qualification === 'hot').length, Icon: Flame, className: 'from-rose-500 to-orange-400' },
+    { label: 'Ready for team', value: list.filter((l) => l.leadStatus === 'ready_for_team').length, Icon: CheckCircle2, className: 'from-emerald-500 to-teal-400' },
+    {
+      label: 'Needs a person',
+      value: list.filter((l) => l.leadStatus === 'handover_requested' || l.leadStatus === 'support_enquiry').length,
+      Icon: AlertTriangle,
+      className: 'from-amber-500 to-yellow-400',
+    },
+  ];
 
   return (
-    <div className="flex flex-col h-full min-h-0 space-y-4">
-      {/* Filters & Actions Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Search */}
-          <div className="relative w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" aria-hidden="true" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search enquiries, activities..."
-              className="pl-8 h-8 text-xs bg-surface-panel border-border"
-              aria-label="Search leads"
-            />
-          </div>
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      {/* Header */}
+      <div className="flex shrink-0 items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight text-content-primary">Leads</h2>
+          <p className="text-xs text-content-secondary">
+            Everyone who messaged Resider, with what they need and what to do next.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-9 gap-1.5 rounded-full"
+          onClick={() => {
+            void refetch();
+          }}
+          aria-label="Refresh leads"
+        >
+          <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} aria-hidden="true" />
+          <span className="hidden sm:inline">Refresh</span>
+        </Button>
+      </div>
 
-          {/* Canonical Resider Status Filter */}
-          <select
-            value={selectedStatus}
-            onChange={(e) => handleStatusFilterChange(e.target.value)}
-            className="h-8 rounded-md border border-border bg-surface-panel px-2.5 text-xs text-content-primary focus:outline-none focus:ring-1 focus:ring-accent"
-            aria-label="Filter by status"
+      {/* Summary cards (counts of the leads currently shown) */}
+      <div className="grid shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className={cn('flex items-center gap-3 rounded-2xl bg-gradient-to-br p-3 text-white shadow-sm', stat.className)}
           >
-            <option value="all">All statuses</option>
-            {Object.entries(leadLabels).map(([statusKey, label]) => (
-              <option key={statusKey} value={statusKey}>
-                {label}
-              </option>
-            ))}
-          </select>
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/20">
+              <stat.Icon aria-hidden="true" className="size-4.5" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-xl font-bold leading-6 tabular-nums">{isLoading ? '…' : stat.value}</div>
+              <div className="truncate text-[11px] font-medium text-white/85">{stat.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
 
-          {/* Service Vertical Filter */}
+      {/* Search, service and sort */}
+      <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative sm:w-72">
+          <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search name, activity, country…"
+            className="h-10 rounded-full border-transparent bg-surface-hover pl-10 text-sm"
+            aria-label="Search leads"
+          />
+        </div>
+        <div className="flex items-center gap-2">
           <select
             value={serviceVertical}
             onChange={(e) => setServiceVertical(e.target.value)}
-            className="h-8 rounded-md border border-border bg-surface-panel px-2.5 text-xs text-content-primary focus:outline-none focus:ring-1 focus:ring-accent"
+            className="h-10 rounded-full border border-border bg-surface-panel px-3 text-xs font-medium text-content-primary"
             aria-label="Filter by service"
           >
-            <option value="all">All verticals</option>
-            <option value="residency">UAE Residency</option>
-            <option value="business_setup">Business Setup</option>
-            <option value="both">Residency + Setup</option>
-            <option value="unspecified">Unspecified</option>
+            {serviceOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
-
-          {/* Sort By Toggle */}
           <Button
             size="sm"
             variant="outline"
-            className="text-xs h-8 gap-1.5 bg-surface-panel border-border"
-            onClick={toggleSort}
+            className="h-10 gap-1.5 rounded-full text-xs"
+            onClick={() => setSortBy((prev) => (prev === 'recent' ? 'status' : 'recent'))}
           >
-            <ArrowUpDown className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Sort: {sortBy === 'recent' ? 'Most recent' : 'By status'}</span>
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-content-secondary">
-            {leads ? `${leads.length} leads` : 'Loading…'}
-          </span>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 p-0 text-content-secondary hover:text-content-primary"
-            onClick={() => { void refetch(); }}
-            title="Refresh leads"
-            aria-label="Refresh leads"
-          >
-            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+            <ArrowUpDown className="size-3.5" aria-hidden="true" />
+            {sortBy === 'recent' ? 'Most recent' : 'By status'}
           </Button>
         </div>
       </div>
 
-      {/* Leads Table Container */}
-      <div className="flex-1 min-h-0 overflow-auto rounded-lg border border-border bg-surface-panel">
-        <table className="w-full text-left text-xs border-collapse">
-          <thead className="sticky top-0 z-10 bg-surface-base border-b border-border text-content-secondary text-[11px] uppercase tracking-wider font-medium">
-            <tr>
-              <th className="px-4 py-2.5">Customer</th>
-              <th className="px-4 py-2.5">Service & intent</th>
-              <th className="px-4 py-2.5">Current location</th>
-              <th className="px-4 py-2.5">Phone & WhatsApp</th>
-              <th className="px-4 py-2.5">Emirate & timing</th>
-              <th className="px-4 py-2.5">Customer permissions</th>
-              <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Last active</th>
-              <th className="px-4 py-2.5 text-right"><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading ? (
-              [1, 2, 3, 4, 5].map((i) => (
-                <tr key={i}>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
-                  <td className="px-4 py-3 text-right"><Skeleton className="h-4 w-6 ml-auto" /></td>
-                </tr>
-              ))
-            ) : isError ? (
-              <tr>
-                <td colSpan={9} className="p-8 text-center text-danger">
-                  Could not load leads. Please check your connection and retry.
-                </td>
-              </tr>
-            ) : leads && leads.length > 0 ? (
-              leads.map((lead) => {
-                const isNeedsHand = lead.leadStatus === 'handover_requested' || lead.leadStatus === 'support_enquiry';
-                return (
-                  <tr
-                    key={lead.id}
-                    className="hover:bg-surface-hover/70 transition-colors group cursor-pointer"
-                    onClick={() => handleSelectLead(lead.id)}
-                  >
-                    {/* Customer Name */}
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectLead(lead.id);
-                        }}
-                        className="font-medium text-content-primary hover:text-accent hover:underline text-left block focus:outline-none focus:ring-1 focus:ring-accent rounded"
-                      >
-                        {lead.fullName || 'Anonymous customer'}
-                      </button>
-                      <div className="text-[11px] text-content-secondary mt-0.5">
-                        {lead.profession || lead.workBusinessActivity || 'Activity pending'}
-                      </div>
-                    </td>
-
-                    {/* Service & Intent */}
-                    <td className="px-4 py-3">
-                      <div className="text-content-primary font-medium">
-                        {humanize(lead.serviceVertical)}
-                      </div>
-                      <div className="text-[11px] text-content-secondary">
-                        {lead.residencyIntent ? humanize(lead.residencyIntent) : '—'}
-                      </div>
-                    </td>
-
-                    {/* Current Location & Nationality */}
-                    <td className="px-4 py-3">
-                      <div className="text-content-primary">
-                        {lead.currentLocation || humanize(lead.uaeLocationContext)}
-                      </div>
-                      {lead.nationality && (
-                        <div className="text-[11px] text-content-secondary">
-                          {lead.nationality}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Phone & WhatsApp */}
-                    <td className="px-4 py-3">
-                      <div className="font-mono text-content-primary text-[11px]">
-                        {lead.phoneOrEmail || lead.phoneNumber || '—'}
-                      </div>
-                      {lead.whatsappNumber && lead.whatsappNumber !== lead.phoneOrEmail && (
-                        <div className="text-[10px] text-success font-mono mt-0.5">
-                          WA: {lead.whatsappNumber}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Target Emirate & Timing */}
-                    <td className="px-4 py-3">
-                      <div className="text-content-primary">
-                        {lead.targetEmirate || 'Undecided'}
-                      </div>
-                      <div className="text-[11px] text-content-secondary">
-                        {lead.timeline || 'Undecided timing'}
-                      </div>
-                    </td>
-
-                    {/* Customer Permissions */}
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-1">
-                        {lead.contactPermission ? (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-success/15 text-success font-medium">
-                            Call OK
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-surface-raised text-muted-foreground">
-                            Call pending
-                          </span>
-                        )}
-
-                        {lead.whatsappContactPermission || lead.contactPermission ? (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-success/15 text-success font-medium">
-                            WhatsApp OK
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-surface-raised text-muted-foreground">
-                            WA pending
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                          isNeedsHand
-                            ? 'bg-warning/15 text-warning border border-warning/30'
-                            : lead.leadStatus === 'ready_for_team'
-                            ? 'bg-success/15 text-success border border-success/30'
-                            : 'text-content-primary'
-                        }`}
-                      >
-                        {leadLabels[lead.leadStatus]}
-                      </span>
-                      {lead.statusReason && (
-                        <div className="text-[11px] text-content-secondary truncate max-w-[150px] mt-0.5" title={lead.statusReason}>
-                          {lead.statusReason}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Last active */}
-                    <td className="px-4 py-3 text-content-secondary text-[11px] whitespace-nowrap">
-                      <time dateTime={new Date(lead.updatedAt).toISOString()}>
-                        {absoluteTime(lead.updatedAt)}
-                      </time>
-                    </td>
-
-                    <td className="px-4 py-3 text-right">
-                      <ChevronRight className="w-4 h-4 text-content-secondary group-hover:text-content-primary ml-auto" aria-hidden="true" />
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan={9} className="p-8 text-center text-content-secondary">
-                  <p className="font-medium text-sm text-content-primary">No leads found matching your criteria</p>
-                  <p className="text-xs mt-1">
-                    As inbound customer conversations occur, Resider automatically qualifies and lists profiles here.
-                  </p>
-                </td>
-              </tr>
+      {/* Status chips */}
+      <div className="-mx-1 flex shrink-0 gap-1.5 overflow-x-auto px-1 pb-1" role="group" aria-label="Filter by status">
+        {[['all', 'All'] as const, ...Object.entries(leadLabels)].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={selectedStatus === value}
+            onClick={() => handleStatusFilterChange(value)}
+            className={cn(
+              'h-8 shrink-0 rounded-full px-3 text-xs font-semibold transition-colors',
+              selectedStatus === value
+                ? 'brand-gradient text-white shadow-sm'
+                : 'bg-surface-hover text-content-secondary hover:text-content-primary',
             )}
-          </tbody>
-        </table>
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Full Lead Modal */}
-      <LeadModal
-        leadId={selectedLeadId}
-        onClose={() => handleSelectLead(null)}
-        onNavigateToInbox={onNavigateToInbox}
-      />
+      {/* Lead cards */}
+      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+        {isLoading ? (
+          <div className="space-y-2" role="status">
+            <span className="sr-only">Loading leads</span>
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+            ))}
+          </div>
+        ) : isError ? (
+          <div role="alert" className="rounded-2xl border border-danger/30 bg-danger/10 p-6 text-center text-sm text-danger">
+            Could not load leads. Please check your connection and retry.
+          </div>
+        ) : list.length > 0 ? (
+          <ul className="space-y-2">
+            {list.map((lead) => (
+              <LeadCard key={lead.id} lead={lead} onOpen={() => handleSelectLead(lead.id)} />
+            ))}
+          </ul>
+        ) : (
+          <div className="brand-gradient-soft rounded-2xl p-10 text-center">
+            <span className="brand-gradient mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl text-white">
+              <Users aria-hidden="true" className="size-6" />
+            </span>
+            <p className="text-sm font-semibold text-content-primary">No leads match these filters</p>
+            <p className="mt-1 text-xs text-content-secondary">
+              As customers message on Instagram or WhatsApp, Resider qualifies them and lists them here.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <LeadModal leadId={selectedLeadId} onClose={() => handleSelectLead(null)} onNavigateToInbox={onNavigateToInbox} />
     </div>
+  );
+}
+
+function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
+  const qualification = lead.qualification || 'unknown';
+  const service = serviceChip[lead.serviceVertical] ?? serviceChip.unspecified!;
+  const location = [lead.currentCity, lead.currentCountry].filter(Boolean).join(', ') || lead.currentLocation;
+  const phone = lead.phoneOrEmail || lead.phoneNumber;
+  const whatsapp = lead.whatsappSameAsPhone && phone ? phone : lead.whatsappNumber;
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="group flex w-full items-start gap-3 rounded-2xl border border-border bg-surface-panel p-3.5 text-left shadow-sm transition hover:border-violet-400/50 hover:shadow-md sm:items-center sm:gap-4"
+      >
+        <Avatar name={lead.fullName} size="md" />
+        <div className="min-w-0 flex-1 space-y-2 lg:grid lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto] lg:items-center lg:gap-4 lg:space-y-0">
+          {/* Who */}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="truncate text-[15px] font-semibold text-content-primary">
+                {lead.fullName || 'Name not shared yet'}
+              </span>
+              {qualification !== 'unknown' && (
+                <span
+                  className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', qualificationStyle[qualification])}
+                  title={lead.qualificationReason || undefined}
+                >
+                  {qualificationLabels[qualification]}
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-content-secondary">
+              <Briefcase aria-hidden="true" className="size-3 shrink-0" />
+              {lead.profession || lead.workBusinessActivity || 'Work not shared yet'}
+              {lead.nationality ? ` · ${lead.nationality}` : ''}
+            </p>
+          </div>
+
+          {/* What they need */}
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-semibold', service.className)}>{service.label}</span>
+            <span className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-semibold', statusStyle(lead.leadStatus))}>
+              {leadLabels[lead.leadStatus]}
+            </span>
+            {lead.summary && (
+              <p className="basis-full truncate text-xs text-content-secondary" title={lead.summary}>
+                {lead.summary}
+              </p>
+            )}
+          </div>
+
+          {/* Where, when, contact */}
+          <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-1 text-xs text-content-secondary sm:grid-cols-2 lg:grid-cols-1">
+            <span className="flex min-w-0 items-center gap-1">
+              <MapPin aria-hidden="true" className="size-3 shrink-0 text-rose-500" />
+              <span className="truncate">
+                {location || 'Location unknown'}
+                {lead.targetEmirate ? ` → ${lead.targetEmirate}` : ''}
+              </span>
+            </span>
+            <span className="flex min-w-0 items-center gap-1">
+              <CalendarClock aria-hidden="true" className="size-3 shrink-0 text-violet-500" />
+              <span className="truncate">{lead.timeline || 'Timing not set'}</span>
+            </span>
+            {phone ? (
+              <span className="flex min-w-0 items-center gap-1 font-mono">
+                {whatsapp ? (
+                  <MessageCircle aria-hidden="true" className="size-3 shrink-0 text-[#25D366]" />
+                ) : (
+                  <Phone aria-hidden="true" className="size-3 shrink-0 text-sky-500" />
+                )}
+                <span className="truncate">{phone}</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1">
+                <Phone aria-hidden="true" className="size-3 shrink-0" />
+                {lead.contactPending ? 'Contact declined' : 'No number yet'}
+              </span>
+            )}
+          </div>
+
+          {/* Next step */}
+          <div className="flex items-center justify-between gap-2 lg:flex-col lg:items-end">
+            <span className="truncate text-[11px] text-content-muted lg:max-w-[12rem]" title={lead.nextAction || undefined}>
+              {lead.nextAction ? `Next: ${lead.nextAction}` : ''}
+            </span>
+            <time
+              dateTime={new Date(lead.updatedAt).toISOString()}
+              title={absoluteTime(lead.updatedAt)}
+              className="shrink-0 text-[11px] text-content-muted"
+            >
+              {relativeTime(lead.updatedAt)}
+            </time>
+          </div>
+        </div>
+        <ChevronRight
+          className="mt-3 size-4 shrink-0 text-content-muted transition group-hover:translate-x-0.5 group-hover:text-violet-500 sm:mt-0"
+          aria-hidden="true"
+        />
+      </button>
+    </li>
   );
 }

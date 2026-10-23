@@ -141,3 +141,45 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
 }
+
+/* ------------------------------------------------------------------
+ * Channel skins and brand accents (chat threads mirror the customer's app)
+ * ------------------------------------------------------------------ */
+@layer components {
+  /* Instagram DM: gradient outbound bubbles, brand ring around avatars. */
+  .ig-outbound {
+    background-image: linear-gradient(135deg, #a033ff 0%, #6c4cff 45%, #3f8bff 100%);
+    background-attachment: fixed;
+  }
+  .ig-ring {
+    background-image: linear-gradient(45deg, #feda75 0%, #fa7e1e 25%, #d62976 50%, #962fbf 75%, #4f5bd5 100%);
+  }
+  .ig-send {
+    background-image: linear-gradient(135deg, #a033ff, #3f8bff);
+  }
+
+  /* WhatsApp: beige doodle-like wallpaper (dark: deep teal). */
+  .wa-wallpaper {
+    background-color: #efeae2;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgb(0 0 0 / 0.035) 1.5px, transparent 1.6px),
+      radial-gradient(circle at 70% 60%, rgb(0 0 0 / 0.03) 1.2px, transparent 1.3px),
+      radial-gradient(circle at 40% 80%, rgb(0 0 0 / 0.025) 2px, transparent 2.1px);
+    background-size: 46px 46px, 38px 38px, 62px 62px;
+  }
+  .dark .wa-wallpaper {
+    background-color: #0b141a;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgb(255 255 255 / 0.03) 1.5px, transparent 1.6px),
+      radial-gradient(circle at 70% 60%, rgb(255 255 255 / 0.025) 1.2px, transparent 1.3px),
+      radial-gradient(circle at 40% 80%, rgb(255 255 255 / 0.02) 2px, transparent 2.1px);
+  }
+
+  /* Resider brand accent for headers, empty states and highlights. */
+  .brand-gradient {
+    background-image: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+  }
+  .brand-gradient-soft {
+    background-image: linear-gradient(135deg, rgb(99 102 241 / 0.12), rgb(236 72 153 / 0.10));
+  }
+}

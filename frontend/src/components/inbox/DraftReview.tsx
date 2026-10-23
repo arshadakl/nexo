@@ -36,11 +36,11 @@ export function DraftReview({
   return (
     <section
       aria-label="AI draft review"
-      className="shrink-0 rounded-lg border border-border bg-surface-panel p-3"
+      className="shrink-0 rounded-2xl border border-violet-500/30 bg-surface-panel p-3 shadow-sm ring-1 ring-violet-500/10"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <h3 className="flex items-center gap-2 font-medium text-foreground">
-          <FileText aria-hidden="true" className="size-4 text-primary" />
+          <span className="brand-gradient flex size-6 items-center justify-center rounded-lg text-white"><FileText aria-hidden="true" className="size-3.5" /></span>
           {isFailed ? 'Approved reply' : 'AI draft'}{' '}
           <span className="text-muted-foreground">
             ·{' '}
@@ -133,7 +133,7 @@ export function DraftReview({
       )}
 
       <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-        <label className="mr-auto flex items-center gap-1.5 text-xs text-content-secondary">
+        <label className="mr-auto flex basis-full items-center gap-1.5 text-xs text-content-secondary sm:basis-auto">
           After rejecting
           <select
             aria-label="After rejecting"

@@ -183,8 +183,8 @@ export function createWorkspaceFixture() {
       drafts[id] = null;
       return ok(result);
     }
+    if (url.pathname === '/api/leads') return ok(sampleLeads(now));
     if (
-      url.pathname === '/api/leads' ||
       url.pathname === '/api/experts' ||
       url.pathname === '/api/integrations'
     )
@@ -192,4 +192,26 @@ export function createWorkspaceFixture() {
     return error(404, 'Unsupported fixture endpoint');
   };
   return { fetcher, requests, state, conversations, drafts, messages };
+}
+
+function sampleLeads(now) {
+  const base = {
+    tenantId: 'fixture', uaeLocationContext: 'outside_uae', detectedLanguage: 'en', contactPermission: false,
+    externalSharingPermission: false, missingDetails: [], questionsAnswered: [], createdAt: now - 86400000,
+  };
+  return [
+    {
+      ...base, id: 'lead-a', fullName: 'Sayed Adinan', serviceVertical: 'residency', residencyIntent: 'residency_only',
+      profession: 'Software developer', nationality: 'Indian', currentCountry: 'United States', targetEmirate: 'Sharjah',
+      timeline: 'as soon as possible', phoneOrEmail: '+91 81118 57749', whatsappSameAsPhone: true, leadStatus: 'ready_for_team',
+      qualification: 'hot', qualificationReason: 'Wants residency as soon as possible and shared contact details',
+      summary: 'Residency visa for himself in Sharjah', nextAction: 'Confirm free zone and costing on WhatsApp', updatedAt: now - 600000,
+    },
+    {
+      ...base, id: 'lead-b', fullName: 'Fatima Noor', serviceVertical: 'business_setup', residencyIntent: 'unspecified',
+      workBusinessActivity: 'E-commerce', nationality: 'Pakistani', currentCountry: 'United Arab Emirates', currentCity: 'Dubai',
+      uaeLocationContext: 'inside_uae', leadStatus: 'exploring', qualification: 'warm', qualificationReason: 'Exploring setup options',
+      updatedAt: now - 7200000,
+    },
+  ];
 }

@@ -28,7 +28,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog } from '@/components/ui/Dialog';
 import { ErrorState } from '@/components/feedback/ErrorState';
-import { MessageItem } from './MessageItem';
+import { DaySeparator, MessageItem } from './MessageItem';
+import { Avatar } from '@/components/ui/Avatar';
+import { channelTheme } from '@/lib/channelTheme';
 import { MessageComposer } from './MessageComposer';
 import { DraftReview } from './DraftReview';
 import { CustomerDetails } from './CustomerDetails';
@@ -126,6 +128,17 @@ function ConversationSession({
     (conversation.humanTakeover ? 'human_takeover' : conversation.aiMode === 'OFF' ? 'ai_off' : 'ai_active');
   const isPaused = automationState !== 'ai_active';
   const qualification = conversation.lead?.qualification ?? 'unknown';
+  const theme = channelTheme(conversation.channel);
+  const isWhatsApp = conversation.channel === 'whatsapp';
+  const headerButton = isWhatsApp
+    ? 'text-white hover:bg-white/15 hover:text-white dark:text-[#aebac1] dark:hover:bg-white/10'
+    : 'text-content-primary hover:bg-surface-hover';
+  const headerPill = cn(
+    'min-h-9 rounded-full px-3 text-xs font-semibold',
+    isWhatsApp
+      ? 'border border-white/50 bg-white/10 text-white hover:bg-white/20 dark:border-white/20'
+      : 'border border-border bg-surface-panel hover:bg-surface-hover',
+  );
   const isBusy = draft.action !== null;
   const isStaleEdit = Boolean(
     draft.editing && (!pendingDraft || pendingDraft.id !== draft.editing.id),
@@ -252,74 +265,75 @@ function ConversationSession({
         aria-label={`Conversation with ${conversation.customerName}`}
         className="flex min-h-0 min-w-0 flex-1 flex-col"
       >
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-3 sm:px-5">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className={cn('flex shrink-0 items-center justify-between gap-2 px-2 py-2 sm:px-4', theme.header)}>
+          <div className="flex min-w-0 items-center gap-2.5">
             <Button
               type="button"
               variant="ghost"
               size="icon"
               aria-label="Back to conversations"
-              className="size-10 md:hidden"
+              className={cn('size-10 rounded-full md:hidden', headerButton)}
               onClick={onBack}
             >
-              <ArrowLeft aria-hidden="true" className="size-4" />
+              <ArrowLeft aria-hidden="true" className="size-5" />
             </Button>
+            <Avatar name={conversation.customerName} channel={conversation.channel} size="md" />
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold">
+              <h2 className="truncate text-[15px] font-semibold leading-5">
                 {conversation.customerName || 'Unknown customer'}
               </h2>
-              <p className="mt-1 text-xs capitalize text-muted-foreground">
-                {conversation.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram'}
-                {conversation.customerHandle ? ` · ${conversation.customerHandle}` : ''}
+              <p className={cn('truncate text-xs leading-4', theme.headerMuted)}>
+                {conversation.customerHandle || theme.label}
+                {conversation.customerHandle ? ` · ${theme.label}` : ''}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
+            {automationState !== 'human_takeover' && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={headerPill}
+                disabled={takeover.isPending || clear.isPending}
+                onClick={() => takeover.mutate({ takeover: true })}
+              >
+                <UserRound aria-hidden="true" className="size-3.5" />
+                <span className="sr-only sm:not-sr-only">{takeover.isPending ? 'Updating…' : 'Take over'}</span>
+              </Button>
+            )}
+            {isPaused && automationState !== 'approval_sending' && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={headerPill}
+                disabled={resume.isPending || clear.isPending}
+                onClick={() => {
+                  void handleResume().catch(() => {});
+                }}
+              >
+                <Play aria-hidden="true" className="size-3.5" />
+                <span className="sr-only sm:not-sr-only">{resume.isPending ? 'Resuming…' : 'Resume AI'}</span>
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
               size="icon"
               aria-label="Clear conversation history"
               title="Clear conversation history"
-              className="size-10"
+              className={cn('size-10 rounded-full', headerButton)}
               disabled={isBusy || clear.isPending}
               onClick={() => setIsClearOpen(true)}
             >
               <Trash2 aria-hidden="true" className="size-4" />
             </Button>
-            {automationState !== 'human_takeover' && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-h-10"
-                disabled={takeover.isPending || clear.isPending}
-                onClick={() => takeover.mutate({ takeover: true })}
-              >
-                <UserRound aria-hidden="true" className="size-4" />
-                {takeover.isPending ? 'Updating…' : 'Take over'}
-              </Button>
-            )}
-            {isPaused && automationState !== 'approval_sending' && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-h-10"
-                disabled={resume.isPending || clear.isPending}
-                onClick={() => {
-                  void handleResume().catch(() => {});
-                }}
-              >
-                <Play aria-hidden="true" className="size-4" />
-                {resume.isPending ? 'Resuming…' : 'Resume AI'}
-              </Button>
-            )}
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="size-10 min-[1440px]:hidden"
+              className={cn('size-10 rounded-full min-[1440px]:hidden', headerButton)}
               aria-label="Open customer details"
               onClick={() => setIsDetailsOpen(true)}
             >
@@ -330,20 +344,29 @@ function ConversationSession({
         <div
           role="status"
           className={cn(
-            'flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-xs',
+            'flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-border px-4 py-1.5 text-xs',
             automationState === 'send_failed'
               ? 'bg-danger/10 text-danger'
               : isPaused
                 ? 'bg-warning/10 text-warning'
-                : 'text-muted-foreground',
+                : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
           )}
         >
-          <span className="font-medium">{automationLabels[automationState]}</span>
-          <span className="text-content-secondary">· {automationDescriptions[automationState]}</span>
+          <span className="inline-flex items-center gap-1.5 font-semibold" title={automationDescriptions[automationState]}>
+            <span
+              aria-hidden="true"
+              className={cn(
+                'size-2 rounded-full',
+                automationState === 'send_failed' ? 'bg-danger' : isPaused ? 'bg-warning' : 'animate-pulse bg-emerald-500',
+              )}
+            />
+            {automationLabels[automationState]}
+          </span>
+          <span className="hidden truncate text-content-secondary 2xl:inline">· {automationDescriptions[automationState]}</span>
           {conversation.lead && (
             <Badge
               variant={qualificationVariant[qualification]}
-              className="ml-auto"
+              className="ml-auto rounded-full"
               title={conversation.lead.qualificationReason || undefined}
             >
               Lead: {qualificationLabels[qualification]}
@@ -391,7 +414,7 @@ function ConversationSession({
                 stream.scrollHeight - stream.scrollTop - stream.clientHeight < 96;
               if (isNearBottom.current) setHasNewMessages(false);
             }}
-            className="h-full overflow-y-auto px-4 py-5 sm:px-5"
+            className={cn('h-full overflow-y-auto px-3 py-4 sm:px-6', theme.canvas)}
           >
             <div className="flex min-h-full flex-col">
               {messages.isPending ? (
@@ -402,14 +425,29 @@ function ConversationSession({
                 </div>
               ) : messages.data?.length ? (
                 <>
-                  <p className="mb-6 text-center text-xs text-muted-foreground">
-                    Recent history · up to 50 messages
-                  </p>
-                  <ol className="space-y-6">
-                    {messages.data.map((message) => (
+                  <div className="mb-2 flex flex-col items-center gap-2 pt-2 text-center">
+                    <Avatar name={conversation.customerName} channel={conversation.channel} size="lg" />
+                    <p className={cn('text-xs', isWhatsApp ? 'rounded-md bg-[#ffeecd] px-3 py-1.5 text-[#54656f] dark:bg-[#182229] dark:text-[#ffd279]' : 'text-content-muted')}>
+                      {isWhatsApp ? 'WhatsApp conversation · recent history, up to 50 messages' : 'Instagram conversation · recent history, up to 50 messages'}
+                    </p>
+                  </div>
+                  <ol>
+                    {messages.data.map((message, index, all) => {
+                      const previous = all[index - 1];
+                      const next = all[index + 1];
+                      const sameSide = (a?: typeof message, b?: typeof message) =>
+                        Boolean(a && b && a.direction === b.direction && a.senderType === b.senderType &&
+                          Math.abs(a.createdAt - b.createdAt) < 5 * 60 * 1000 &&
+                          new Date(a.createdAt).toDateString() === new Date(b.createdAt).toDateString());
+                      const newDay = !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString();
+                      return [
+                        newDay && <DaySeparator key={`day-${message.id}`} at={message.createdAt} channel={conversation.channel} />,
                       <MessageItem
                         key={message.id}
                         message={message}
+                        channel={conversation.channel}
+                        isFirstInGroup={newDay || !sameSide(previous, message)}
+                        isLastInGroup={!sameSide(message, next)}
                         customerName={conversation.customerName || 'Customer'}
                         isRetrying={retryMessage.isPending && retryMessage.variables === message.id}
                         onRetry={
@@ -419,8 +457,9 @@ function ConversationSession({
                             ? () => retryMessage.mutate(message.id)
                             : undefined
                         }
-                      />
-                    ))}
+                      />,
+                      ];
+                    })}
                   </ol>
                 </>
               ) : (
@@ -471,7 +510,7 @@ function ConversationSession({
               type="button"
               variant="secondary"
               size="sm"
-              className="absolute bottom-3 left-1/2 -translate-x-1/2"
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full shadow-lg"
               onClick={() => {
                 const stream = streamRef.current;
                 if (stream) stream.scrollTop = stream.scrollHeight;
@@ -487,6 +526,7 @@ function ConversationSession({
         <MessageComposer
           draft={draft}
           customerName={conversation.customerName || 'customer'}
+          channel={conversation.channel}
           isStaleEdit={
             isStaleEdit || Boolean(draft.editing && (draftQuery.isPending || draftQuery.isError))
           }

@@ -1,4 +1,4 @@
-import { Search, RefreshCw, MessageSquare } from 'lucide-react';
+import { Search, RefreshCw, MessageSquare, Instagram, MessageCircle, Inbox, AlertCircle } from 'lucide-react';
 import type { ConversationSummary } from '@shared/types/crm.types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -35,56 +35,68 @@ export function ConversationList({
   const hasFilters = Boolean(route.search || route.channel !== 'all' || route.humanOnly);
   return (
     <section aria-label="Conversations" className="flex h-full min-h-0 flex-col bg-surface-panel">
-      <div className="shrink-0 space-y-3 border-b border-border p-4">
+      <div className="shrink-0 space-y-3 px-4 pt-4 pb-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[13px] font-semibold">Conversations</h2>
+          <h2 className="text-lg font-bold tracking-tight">Chats</h2>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="size-9"
+            className="size-9 rounded-full"
             aria-label="Refresh conversations"
             disabled={isFetching}
             onClick={onRefresh}
           >
-            <RefreshCw aria-hidden="true" className="size-4" />
+            <RefreshCw aria-hidden="true" className={cn('size-4', isFetching && 'animate-spin')} />
           </Button>
         </div>
         <div className="relative">
           <Search
             aria-hidden="true"
-            className="absolute left-3 top-3 size-4 text-muted-foreground"
+            className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           />
           <Input
             aria-label="Search conversations"
             placeholder="Search names or messages…"
             value={route.search}
             onChange={(event) => onChange({ search: event.target.value }, true)}
-            className="h-10 pl-9"
+            className="h-10 rounded-full border-transparent bg-surface-hover pl-10"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <select
-            aria-label="Filter by channel"
-            value={route.channel}
-            onChange={(event) =>
-              onChange({ channel: event.target.value as WorkspaceRoute['channel'] })
-            }
-            className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-[13px] text-foreground"
-          >
-            <option value="all">All channels</option>
-            <option value="instagram">Instagram</option>
-            <option value="whatsapp">WhatsApp</option>
-          </select>
-          <Button
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by channel">
+          {(
+            [
+              { value: 'all', label: 'All', Icon: Inbox, active: 'bg-foreground text-background' },
+              { value: 'instagram', label: 'Instagram', Icon: Instagram, active: 'ig-ring text-white' },
+              { value: 'whatsapp', label: 'WhatsApp', Icon: MessageCircle, active: 'bg-[#25D366] text-white' },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              aria-pressed={route.channel === tab.value}
+              onClick={() => onChange({ channel: tab.value })}
+              className={cn(
+                'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors',
+                route.channel === tab.value ? tab.active : 'bg-surface-hover text-content-secondary hover:text-content-primary',
+              )}
+            >
+              <tab.Icon aria-hidden="true" className="size-3.5" />
+              {tab.label}
+            </button>
+          ))}
+          <button
             type="button"
-            variant={route.humanOnly ? 'secondary' : 'ghost'}
             aria-pressed={route.humanOnly}
             onClick={() => onChange({ humanOnly: !route.humanOnly })}
-            className="h-10 px-2"
+            className={cn(
+              'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors',
+              route.humanOnly ? 'bg-amber-500 text-white' : 'bg-surface-hover text-content-secondary hover:text-content-primary',
+            )}
           >
-            Human handling
-          </Button>
+            <AlertCircle aria-hidden="true" className="size-3.5" />
+            Needs attention
+          </button>
         </div>
       </div>
       {isError && (
@@ -99,18 +111,20 @@ export function ConversationList({
       )}
       <div className="min-h-0 flex-1 overflow-y-auto" aria-busy={isLoading || isFiltering}>
         {isLoading ? (
-          <div role="status" className="space-y-5 p-4">
+          <div role="status" className="space-y-4 p-4">
             <span className="sr-only">Loading conversations</span>
             {[1, 2, 3, 4].map((key) => (
-              <div key={key} className="space-y-2">
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-3 w-1/2" />
+              <div key={key} className="flex items-center gap-3">
+                <Skeleton className="size-11 shrink-0 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-full" />
+                </div>
               </div>
             ))}
           </div>
         ) : conversations?.length ? (
-          <ul className={cn(isFiltering && 'opacity-60')}>
+          <ul className={cn('pb-2', isFiltering && 'opacity-60')}>
             {conversations.map((conversation) => (
               <ConversationRow
                 key={conversation.id}
@@ -124,7 +138,9 @@ export function ConversationList({
         ) : (
           !isError && (
             <div className="space-y-3 px-6 py-12 text-center">
-              <MessageSquare aria-hidden="true" className="mx-auto size-6 text-muted-foreground" />
+              <span className="brand-gradient mx-auto flex size-12 items-center justify-center rounded-2xl text-white">
+                <MessageSquare aria-hidden="true" className="size-6" />
+              </span>
               <h3 className="text-sm font-medium">
                 {hasFilters ? 'No matching conversations' : 'Your inbox is clear'}
               </h3>
@@ -137,6 +153,7 @@ export function ConversationList({
                 <Button
                   type="button"
                   variant="outline"
+                  className="rounded-full"
                   onClick={() => onChange({ search: '', channel: 'all', humanOnly: false })}
                 >
                   Clear filters
@@ -146,7 +163,7 @@ export function ConversationList({
           )
         )}
       </div>
-      <p className="shrink-0 border-t border-border px-4 py-3 text-xs text-muted-foreground">
+      <p className="shrink-0 border-t border-border px-4 py-2.5 text-[11px] text-muted-foreground">
         {isFiltering
           ? 'Updating search…'
           : `${conversations?.length ?? 0} loaded · up to 50 recent results`}
