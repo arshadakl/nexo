@@ -2,6 +2,7 @@ import type { PromptMessage } from './adapter.interface';
 import type { AIQualificationResult, DecryptedAIProviderConfig } from '@shared/types/ai.types';
 import { AIProviderError, OpenAICompatibleAdapter, parseStructuredQualification } from './openAiCompatible';
 import { logger } from '../../lib/logger';
+import { relayFetch } from './relay';
 
 /**
  * Google Gemini adapter using the native REST `generateContent` API
@@ -12,6 +13,7 @@ import { logger } from '../../lib/logger';
  * - Gemini 3 models get a low thinking level so reasoning does not consume the reply budget.
  * - Google Search grounding is intentionally not enabled: replies must use approved info only.
  * - If the chosen model is overloaded (503) or times out, one retry uses FALLBACK_MODEL.
+ * - Calls go through the region-pinned AIRelay when configured (Google refuses some edge locations).
  */
 
 export const GEMINI_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
@@ -91,7 +93,7 @@ export class GeminiAdapter extends OpenAICompatibleAdapter {
 
     let response: Response;
     try {
-      response = await fetch(endpoint, {
+      response = await relayFetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

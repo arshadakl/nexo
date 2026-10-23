@@ -368,9 +368,9 @@ async function handleTurn(
     return 'handled';
   }
 
-  const aiConfig = await aiProviderRepository.getDefaultDecrypted(db, tenantId, masterKey);
-  if (!aiConfig) {
-    logger.warn('No active default AI provider configured for tenant', { tenantId });
+  const providers = await aiProviderRepository.listActiveDecrypted(db, tenantId, masterKey);
+  if (providers.length === 0) {
+    logger.warn('No active AI provider configured for tenant', { tenantId });
     return 'no_provider';
   }
 
@@ -455,7 +455,24 @@ async function handleTurn(
     });
   }
 
-  const qualification = await aiClientFor(aiConfig).generateQualification(aiConfig, promptMessages);
+  // Default provider first; if it fails (region block, rate limit, outage) the next active one answers.
+  let qualification: AIQualificationResult | null = null;
+  let lastError: unknown = null;
+  for (const config of providers) {
+    try {
+      qualification = await aiClientFor(config).generateQualification(config, promptMessages);
+      break;
+    } catch (err) {
+      if (!(err instanceof AIProviderError)) throw err;
+      lastError = err;
+      logger.warn('AI provider failed; trying the next active provider', {
+        provider: config.name,
+        code: err.code,
+        status: err.status,
+      });
+    }
+  }
+  if (!qualification) throw lastError;
 
   // Recheck before acting: a reply written before the customer's newest message is outdated.
   const newer = await db

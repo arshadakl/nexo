@@ -6,6 +6,8 @@ import { aiProviderRoutes } from './routes/aiProvider.routes';
 import { integrationRoutes } from './routes/instagramOAuth.routes';
 import { webhookRoutes } from './routes/webhook.routes';
 import { logger } from './lib/logger';
+import { configureAiRelay } from './adapters/ai/relay';
+export { AIRelay } from './durable/aiRelay';
 import type { WorkerEnv } from './env';
 
 import { conversationRoutes } from './routes/conversation.routes';
@@ -62,6 +64,7 @@ import { sweepUnprocessedConversations } from './services/conversationAutomation
 export default {
   // HTTP Fetch handler: routes API, webhooks & privacy pages to Hono, all else to Workers Static Assets (React SPA)
   async fetch(request: Request, env: WorkerEnv, ctx: ExecutionContext): Promise<Response> {
+    configureAiRelay(env.AI_RELAY);
     const url = new URL(request.url);
     if (
       url.pathname.startsWith('/api') ||
@@ -81,12 +84,14 @@ export default {
 
   // Queue consumer handler (Processes async message qualification and AI tasks)
   async queue(batch: MessageBatch<any>, env: WorkerEnv, _ctx: ExecutionContext): Promise<void> {
+    configureAiRelay(env.AI_RELAY);
     await processQueueBatch(batch, env);
   },
 
 
   // Scheduled cron handler (Runs token auto-refresh and dead-letter webhook sweep)
   async scheduled(event: ScheduledEvent, env: WorkerEnv, _ctx: ExecutionContext): Promise<void> {
+    configureAiRelay(env.AI_RELAY);
     logger.info('Scheduled cron execution triggered', {
       cron: event.cron,
       scheduledTime: event.scheduledTime,

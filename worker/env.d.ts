@@ -2,6 +2,7 @@ export interface WorkerEnv {
   // Bindings
   DB: D1Database;
   MESSAGING_QUEUE: Queue;
+  AI_RELAY?: DurableObjectNamespace; // Region-pinned relay for AI provider calls (see durable/aiRelay.ts)
   ASSETS?: Fetcher;
 
   // Non-secret vars

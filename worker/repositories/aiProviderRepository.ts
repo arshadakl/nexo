@@ -151,6 +151,50 @@ export class AIProviderRepository {
   }
 
   /**
+   * Active providers in fallback order: the default first, then healthy ones, then the rest.
+   * Used so a failing provider (region block, rate limit, outage) does not leave customers unanswered.
+   */
+  async listActiveDecrypted(
+    db: D1Database,
+    tenantId: string,
+    masterKeyBase64: string,
+    limit = 3
+  ): Promise<DecryptedAIProviderConfig[]> {
+    const rows = await db
+      .prepare(
+        `SELECT id, tenant_id, name, base_url, default_model, temperature, max_tokens, custom_headers,
+                encrypted_api_key, key_nonce, key_version
+         FROM tenant_ai_providers
+         WHERE tenant_id = ? AND is_active = 1
+         ORDER BY is_default DESC, CASE last_health_status WHEN 'healthy' THEN 0 WHEN 'unknown' THEN 1 ELSE 2 END, created_at ASC
+         LIMIT ?`
+      )
+      .bind(tenantId, limit)
+      .all<any>();
+
+    const configs: DecryptedAIProviderConfig[] = [];
+    for (const row of rows.results || []) {
+      try {
+        const apiKey = await decryptCredential(row.encrypted_api_key, row.key_nonce, row.key_version, masterKeyBase64);
+        configs.push({
+          id: row.id,
+          tenantId: row.tenant_id,
+          name: row.name,
+          baseUrl: row.base_url,
+          apiKey,
+          defaultModel: row.default_model,
+          temperature: row.temperature,
+          maxTokens: row.max_tokens,
+          customHeaders: row.custom_headers ? JSON.parse(row.custom_headers) : undefined,
+        });
+      } catch {
+        // A provider whose key cannot be decrypted is skipped rather than blocking the others.
+      }
+    }
+    return configs;
+  }
+
+  /**
    * Creates a new provider, encrypting API key with AES-256-GCM.
    */
   async create(

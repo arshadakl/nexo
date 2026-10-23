@@ -77,16 +77,18 @@ beforeEach(() => {
     MESSAGING_QUEUE: { send: vi.fn(async (body: unknown) => void queued.push(body)) },
   };
 
-  vi.spyOn(aiProviderRepository, 'getDefaultDecrypted').mockResolvedValue({
-    id: 'ai_1',
-    tenantId: TENANT,
-    name: 'test',
-    baseUrl: 'https://ai.invalid/v1',
-    apiKey: 'k',
-    defaultModel: 'm',
-    temperature: 0,
-    maxTokens: 600,
-  });
+  vi.spyOn(aiProviderRepository, 'listActiveDecrypted').mockResolvedValue([
+    {
+      id: 'ai_1',
+      tenantId: TENANT,
+      name: 'test',
+      baseUrl: 'https://ai.invalid/v1',
+      apiKey: 'k',
+      defaultModel: 'm',
+      temperature: 0,
+      maxTokens: 600,
+    },
+  ]);
   vi.spyOn(openAiCompatibleAdapter, 'generateQualification').mockImplementation(async (_cfg, messages) => {
     aiCalls.push(messages);
     const next = aiScript.shift();
@@ -736,5 +738,27 @@ describe('production regressions (2026-10-23 chats)', () => {
     await processQueueBatch({ messages: [{ id: '1', body, ack: vi.fn(), retry }] } as any, env);
     expect(retry).toHaveBeenCalledWith({ delaySeconds: 30 });
     expect(inbound()[0].ai_processed_at).toBeNull();
+  });
+});
+
+describe('AI provider fallback', () => {
+  it('answers with the next active provider when the default one is refused (e.g. Gemini region block)', async () => {
+    const { AIProviderError } = await import('../worker/adapters/ai/openAiCompatible');
+    const { geminiAdapter } = await import('../worker/adapters/ai/gemini');
+    vi.mocked(aiProviderRepository.listActiveDecrypted).mockResolvedValue([
+      { id: 'g', tenantId: TENANT, name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', apiKey: 'x', defaultModel: 'gemini-3.5-flash', temperature: 0.3, maxTokens: 1000 },
+      { id: 'q', tenantId: TENANT, name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', apiKey: 'y', defaultModel: 'm', temperature: 0.2, maxTokens: 600 },
+    ]);
+    const gemini = vi
+      .spyOn(geminiAdapter, 'generateQualification')
+      .mockRejectedValue(new AIProviderError('User location is not supported for the API use.', 'PROVIDER_ERROR', 400));
+    aiScript.push({ replyText: 'Hey! 👋 What can we help you with?' });
+
+    await webhook('m1', 'hi');
+    await drain();
+
+    expect(gemini).toHaveBeenCalledTimes(1);
+    expect(aiCalls).toHaveLength(1); // Groq (OpenAI-compatible) answered
+    expect(outbound().map((m) => m.message_text)).toEqual(['Hey! 👋 What can we help you with?']);
   });
 });

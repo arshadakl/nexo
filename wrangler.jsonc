@@ -19,6 +19,21 @@
       "migrations_dir": "migrations"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        // Region-pinned relay for AI provider calls (Google refuses some edge locations)
+        "name": "AI_RELAY",
+        "class_name": "AIRelay"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-ai-relay",
+      "new_sqlite_classes": ["AIRelay"]
+    }
+  ],
   "queues": {
     "producers": [
       {
