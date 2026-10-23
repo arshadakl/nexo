@@ -31,7 +31,7 @@
         "queue": "nexo-messaging-queue",
         "max_batch_size": 1,
         "max_batch_timeout": 5,
-        "max_retries": 3,
+        "max_retries": 6,
         "dead_letter_queue": "nexo-messaging-dlq"
       }
     ]

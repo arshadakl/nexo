@@ -1,4 +1,4 @@
-import { openAiCompatibleAdapter } from '../adapters/ai/openAiCompatible';
+import { AIProviderError, openAiCompatibleAdapter } from '../adapters/ai/openAiCompatible';
 import { aiProviderRepository } from '../repositories/aiProviderRepository';
 import { knowledgeRepository } from '../repositories/knowledgeRepository';
 import { conversationRepository } from '../repositories/conversationRepository';
@@ -14,6 +14,7 @@ import {
   unsupportedFallbackText,
 } from '../lib/inboundContent';
 import { getAutomationSnapshot } from '../services/conversationAutomation';
+import { buildIntakeChecklist, isNearDuplicateReply } from '../lib/intakeChecklist';
 import { dispatchOutboundText } from '../services/outboundDispatch';
 import { logger } from '../lib/logger';
 import type { WorkerEnv } from '../env';
@@ -36,7 +37,10 @@ import type { DraftReviewKind } from '@shared/types/draft.types';
 
 const LEASE_MS = 90_000;
 const MAX_TURN_PASSES = 3;
-const HISTORY_LIMIT = 30;
+// Kept short: the lead record carries what was collected, and smaller calls avoid provider token limits.
+const HISTORY_LIMIT = 16;
+// Provider rate limits (429) reset within a minute; retry after a pause instead of immediately.
+const AI_RETRY_DELAY_SECONDS = 30;
 const LEASE_RETRY_DELAY_SECONDS = 5;
 
 export class LeaseBusyError extends Error {
@@ -199,7 +203,15 @@ export async function processQueueBatch(
             .run();
         }
       } catch {}
-      message.retry(busy ? { delaySeconds: LEASE_RETRY_DELAY_SECONDS } : undefined);
+      const providerBusy =
+        err instanceof AIProviderError && (err.code === 'RATE_LIMITED' || err.code === 'TIMEOUT');
+      message.retry(
+        busy
+          ? { delaySeconds: LEASE_RETRY_DELAY_SECONDS }
+          : providerBusy
+            ? { delaySeconds: AI_RETRY_DELAY_SECONDS }
+            : undefined
+      );
     }
   }
 }
@@ -385,6 +397,7 @@ async function handleTurn(
   const history = historyRows.results || [];
 
   const confirmedFields = parseJsonArray(lead?.confirmed_fields_json);
+  const intakeBefore = buildIntakeChecklist(lead);
   const systemPrompt = buildResiderSystemPrompt({
     lead: lead
       ? {
@@ -421,6 +434,7 @@ async function handleTurn(
     approvedKnowledge,
     turn: { messages: textMessages.map((m) => m.message_text), hasUnsupportedAttachment: hasUnsupported },
     messageDate: new Date(turnLatestAt).toISOString().slice(0, 10),
+    intake: intakeBefore,
   });
 
   const promptMessages: PromptMessage[] = [{ role: 'system', content: systemPrompt }];
@@ -455,7 +469,18 @@ async function handleTurn(
     .filter((m) => m.delivery_status === 'delivered' || m.delivery_status === 'read' || m.delivery_status === 'sent')
     .flatMap((m) => extractPriceFigures(m.message_text));
 
-  const replyText = qualification.replyText?.trim() || null;
+  let replyText = qualification.replyText?.trim() || null;
+
+  // Never send (or queue for approval) a reply that repeats one of the last few outbound messages.
+  const recentOutbound = history
+    .filter((m) => m.sender_type !== 'applicant')
+    .slice(-3)
+    .map((m) => String(m.message_text));
+  if (replyText && isNearDuplicateReply(replyText, recentOutbound)) {
+    logger.info('Dropped reply that repeats a recent outbound message', { conversationId });
+    replyText = null;
+    qualification.humanReviewRequired = false;
+  }
   const policy = replyText ? evaluateReplyPolicy(replyText, { approvedFigures }) : null;
   const isPolicyViolation = Boolean(policy && !policy.allowed);
   const isModelFallback = qualification.safetyFlags.some((f) => f === 'INVALID_MODEL_OUTPUT' || f === 'JSON_PARSE_EXCEPTION');
@@ -508,6 +533,22 @@ async function handleTurn(
   }
 
   await sendAutoReply(db, masterKey, tenantId, conversationId, target, replyText, turnIds, turnLatestAt);
+
+  // The closing summary went out (intake was already complete) or the model marked it done:
+  // record the lead as ready for the team so the summary is not repeated.
+  const leadAfter = await db.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<any>();
+  const intakeAfter = buildIntakeChecklist(leadAfter);
+  if (
+    intakeAfter.complete &&
+    !intakeAfter.summarySent &&
+    (intakeBefore.complete || qualification.leadStatus === 'ready_for_team') &&
+    ['needs_clarification', 'exploring', 'ready_for_team'].includes(String(leadAfter?.lead_status))
+  ) {
+    await db
+      .prepare("UPDATE leads SET lead_status = 'ready_for_team', status_reason = ?, updated_at = ? WHERE id = ?")
+      .bind('Intake complete; summary and next step sent to the customer', Date.now(), leadId)
+      .run();
+  }
   return 'handled';
 }
 

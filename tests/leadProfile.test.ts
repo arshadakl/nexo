@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mergeLeadProfile, resolveQualification, sanitizeLocationFields } from '../worker/lib/leadProfile';
 import { buildResiderSystemPrompt } from '../worker/lib/residerPrompt';
+import { buildIntakeChecklist, isNearDuplicateReply } from '../worker/lib/intakeChecklist';
 import { AIQualificationResultSchema } from '../shared/schemas/ai.schema';
 import { evaluateReplyPolicy } from '../worker/lib/policyEngine';
 import { classifyAttachments, hasCustomerText, placeholderText } from '../worker/lib/inboundContent';
@@ -223,5 +224,50 @@ describe('inbound normalisation', () => {
     ]);
     expect(hasCustomerText('image', 'my licence')).toBe(true);
     expect(hasCustomerText('audio', placeholderText(classifyAttachments([{ type: 'audio' }])))).toBe(false);
+  });
+});
+
+describe('intake checklist', () => {
+  it('asks the service first, then service questions before profile and contact', () => {
+    expect(buildIntakeChecklist(null).stillNeeded.map((i) => i.key)).toEqual(['service']);
+    expect(buildIntakeChecklist({ service_vertical: 'residency' }).stillNeeded.map((i) => i.key)).toEqual([
+      'profession', 'residencyRoute', 'currentLocation', 'preferredEmirate', 'timeline', 'name', 'nationality', 'phone',
+    ]);
+  });
+
+  it('asks visa status only when the person is in the UAE, and sharing permission only for business setup', () => {
+    const inUae = buildIntakeChecklist({ service_vertical: 'residency', uae_location_context: 'inside_uae' });
+    expect(inUae.stillNeeded.map((i) => i.key)).toContain('visaStatus');
+    expect(inUae.stillNeeded.find((i) => i.key === 'timeline')!.question).toBe('When would you like to proceed?');
+    expect(buildIntakeChecklist({ service_vertical: 'residency' }).stillNeeded.map((i) => i.key)).not.toContain('expertSharingPermission');
+    expect(buildIntakeChecklist({ service_vertical: 'business_setup' }).stillNeeded.map((i) => i.key)).toContain('expertSharingPermission');
+  });
+
+  it('is complete for the Sayed Adinan chat once timing and emirate are known', () => {
+    const lead = {
+      service_vertical: 'residency', residency_intent: 'residency_only', profession: 'software developer', current_country: 'America',
+      full_name: 'Sayed Adinan', nationality: 'Indian', phone_or_email: '+91 8111857749', whatsapp_same_as_phone: 1,
+      target_emirate: 'Sharjah', lead_status: 'needs_clarification',
+    };
+    expect(buildIntakeChecklist(lead).nextQuestion).toBe('When are you hoping to get started?');
+    expect(buildIntakeChecklist({ ...lead, timeline: 'as soon as possible' })).toMatchObject({ complete: true, summarySent: false });
+  });
+
+  it('spots repeated replies', () => {
+    expect(isNearDuplicateReply(
+      "I'm Resider's automated assistant, not Anas. I can't provide pricing here, but I'll forward your question to our team and they'll get back to you with the details.",
+      ["No, I'm Resider's automated assistant, not Anas. I'm not able to share pricing details here, but our team will get back to you with the correct cost information."],
+      0.5
+    )).toBe(true);
+    expect(isNearDuplicateReply('When are you hoping to get started?', ['Which emirate would you prefer?'])).toBe(false);
+  });
+
+  it('prompt forbids document collection, requirement lists and filler phrases', () => {
+    const prompt = buildResiderSystemPrompt({ channel: 'instagram', approvedKnowledge: [], intake: buildIntakeChecklist(null) });
+    expect(prompt).toContain('DOCUMENTS ARE NEVER COLLECTED IN THIS CHAT');
+    expect(prompt).toContain('Never list visa requirements');
+    expect(prompt).toContain('"That\'s right"');
+    expect(prompt).toContain('<intake_progress>');
+    expect(prompt).toContain('CLOSING SUMMARY');
   });
 });

@@ -140,6 +140,14 @@ export async function sendDraft(env: QueueEnv, params: SendDraftParams): Promise
       env.DB
         .prepare('UPDATE conversations SET last_message_at = ?, last_outbound_at = ?, updated_at = ? WHERE id = ?')
         .bind(sentAt, sentAt, sentAt, draft.conversationId),
+      // Messages received before the reviewer clicked send were shown to them (approval requires
+      // acknowledging them), so the sent reply answers them: do not generate a second reply.
+      env.DB
+        .prepare(
+          `UPDATE messages SET ai_processed_at = ?
+           WHERE conversation_id = ? AND direction = 'inbound' AND ai_processed_at IS NULL AND created_at <= ?`
+        )
+        .bind(sentAt, draft.conversationId, now),
     ]);
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);

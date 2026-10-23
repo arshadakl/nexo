@@ -410,10 +410,11 @@ describe('H. approved send fails', () => {
     expect(outbound()).toHaveLength(1); // same message row, now delivered
     expect(outbound()[0].delivery_status).toBe('delivered');
 
-    aiScript.push({ replyText: 'Hi again! Anything else you would like to know?' });
-    await drain(); // follow-up job processes the waiting "Hello?" once
-    expect(aiCalls).toHaveLength(2);
-    expect(outbound()).toHaveLength(2);
+    // The reviewer saw "Hello?" before retrying; the delivered reply covers it, so no second reply.
+    await drain();
+    expect(aiCalls).toHaveLength(1);
+    expect(outbound()).toHaveLength(1);
+    expect(inbound().every((m) => m.ai_processed_at !== null)).toBe(true);
   });
 
   it('treats a missing channel connection as a failure, not a send', async () => {
@@ -543,11 +544,38 @@ describe('K. new message while approval is pending', () => {
     expect(sent.status).toBe(200);
     expect(sent.json.data.status).toBe('modified_sent');
 
-    aiScript.push({ replyText: null });
-    await drain(); // the waiting message is processed once with the reviewer's reply in history
+    // The reviewer's reply answers the message they acknowledged: no second AI reply or draft.
+    await drain();
+    expect(aiCalls).toHaveLength(1);
+    expect(outbound()).toHaveLength(1);
+    expect(drafts()).toHaveLength(1);
+
+    // A message sent after the approval is answered normally.
+    aiScript.push({ replyText: 'Which emirate would you prefer, or are you open to options?' });
+    await webhook('m_after', 'Ok thanks');
+    await drain();
     expect(aiCalls).toHaveLength(2);
-    expect(aiCalls[1]!.at(-1)!.content).toContain('Dubai and Sharjah');
-    expect(outbound()).toHaveLength(1); // model had nothing to add
+    expect(aiCalls[1]!.some((m) => m.role === 'assistant' && m.content.includes('Dubai and Sharjah'))).toBe(true);
+    expect(outbound()).toHaveLength(2);
+  });
+
+  it('does not answer the same question twice after an approved reply (production regression)', async () => {
+    aiScript.push({
+      ...priceReview,
+      replyText: "No, I'm Resider's automated assistant, not Anas. The team will confirm the pricing for you.",
+    });
+    await webhook('m1', 'Is this anas right?');
+    await webhook('m2', 'Okey then how much will be the prisings?');
+    await drain();
+    await webhook('m3', 'Heyy');
+    await drain();
+    const draft = drafts()[0];
+    await post(draftRoutes, `/${draft.id}/approve`, { acknowledgeNewMessages: true });
+    // Even if the model would repeat itself, nothing further is generated or queued for approval.
+    aiScript.push({ ...priceReview, replyText: "I'm Resider's automated assistant, not Anas. The team will confirm the pricing for you." });
+    await drain();
+    expect(drafts()).toHaveLength(1);
+    expect(outbound()).toHaveLength(1);
   });
 });
 
@@ -618,5 +646,83 @@ describe('recovery', () => {
       { id: 'stuck_by_ai', human_takeover: 0 },
     ]);
     expect((old.prepare("SELECT status FROM message_drafts WHERE id = 'd1'").get() as any).status).toBe('approved_sent');
+  });
+});
+
+describe('production regressions (2026-10-23 chats)', () => {
+  it('drops a reply that repeats a recent outbound message', async () => {
+    aiScript.push({ replyText: 'What number can the team reach you on, including country code?' });
+    await webhook('m1', 'I am a software developer');
+    await drain();
+    aiScript.push({ replyText: 'What number can the team reach you on, including the country code?' });
+    await webhook('m2', 'ok');
+    await drain();
+    expect(outbound()).toHaveLength(1);
+    expect(inbound().every((m) => m.ai_processed_at !== null)).toBe(true);
+  });
+
+  it("ignores Instagram's auto-generated phone-number card instead of asking about an attachment", async () => {
+    clock += 1000;
+    const payload = {
+      object: 'instagram',
+      entry: [{ id: IG_ACCOUNT, messaging: [
+        { sender: { id: CUSTOMER }, recipient: { id: IG_ACCOUNT }, timestamp: clock, message: { mid: 'p1', text: '+91 8111857749' } },
+        { sender: { id: CUSTOMER }, recipient: { id: IG_ACCOUNT }, timestamp: clock, message: { mid: 'p2', attachments: [{ type: 'template', payload: {} }] } },
+      ] }],
+    };
+    await webhookRoutes.fetch(new Request('http://test/meta/instagram', { method: 'POST', body: JSON.stringify(payload) }), env);
+    aiScript.push({ replyText: 'Is that also your WhatsApp number?', extractedFields: { phoneOrEmail: '+91 8111857749' } });
+    await drain();
+    expect(inbound()).toHaveLength(1);
+    expect(aiCalls[0]![0]!.content).toContain('"unreadableVoiceNoteOrAttachment": false');
+    expect(outbound().map((m) => m.message_text)).toEqual(['Is that also your WhatsApp number?']);
+  });
+
+  it('gives the model the next missing question, then sends the summary once and marks the lead ready', async () => {
+    aiScript.push({
+      intent: 'residency',
+      replyText: 'Which emirate would you prefer, or are you open to options?',
+      extractedFields: {
+        serviceVertical: 'residency', residencyIntent: 'residency_only', fullName: 'Sayed Adinan', nationality: 'Indian',
+        currentCountry: 'United States', profession: 'software developer', phoneOrEmail: '+91 8111857749', whatsappSameAsPhone: true,
+      },
+      fieldConfidence: { fullName: 0.95, nationality: 0.95 },
+    });
+    await webhook('m1', 'residency visa, Sayed Adinan, Indian, in America, software developer, +91 8111857749 same WhatsApp');
+    await drain();
+
+    aiScript.push({ replyText: 'When are you hoping to get started?', extractedFields: { targetEmirate: 'Sharjah' } });
+    await webhook('m2', 'Sharjah');
+    await drain();
+    expect(systemPrompt(1)).toContain('"nextQuestion": "Which emirate would you prefer, or are you open to options?"');
+
+    aiScript.push({ replyText: 'Thanks, Sayed. Here is what I have...', extractedFields: { timeline: 'as soon as possible' } });
+    await webhook('m3', 'as soon as possible');
+    await drain();
+    expect(systemPrompt(2)).toContain('"nextQuestion": "When are you hoping to get started?"');
+
+    aiScript.push({ replyText: 'The team will confirm the timeline when they contact you.' });
+    await webhook('m4', 'eppala kitta bro');
+    await drain();
+    expect(systemPrompt(3)).toContain('"intakeComplete": true');
+    expect(lead().lead_status).toBe('ready_for_team');
+
+    aiScript.push({ replyText: 'They will reach you on WhatsApp.' });
+    await webhook('m5', 'onn parayuo');
+    await drain();
+    expect(systemPrompt(4)).toContain('"closingSummaryAlreadySent": true');
+  });
+
+  it('waits before retrying when the AI provider rate-limits', async () => {
+    const { AIProviderError } = await import('../worker/adapters/ai/openAiCompatible');
+    aiScript.push(async () => {
+      throw new AIProviderError('AI provider rate limit reached.', 'RATE_LIMITED', 429);
+    });
+    await webhook('m1', 'hi');
+    const body = queued.shift();
+    const retry = vi.fn();
+    await processQueueBatch({ messages: [{ id: '1', body, ack: vi.fn(), retry }] } as any, env);
+    expect(retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    expect(inbound()[0].ai_processed_at).toBeNull();
   });
 });
